@@ -1,10 +1,17 @@
 schemaVersion: "1.0"
 authentication:
-  scheme: Bearer
-  tokens:
-    trader-token: TRADER
-    risk-token: RISK_MANAGER
-    approver-token: APPROVER
+  scheme: demo-headers
+  requiredHeaders:
+    - X-Demo-User
+    - X-Demo-Role
+  optionalHeaders:
+    - X-Run-Id
+    - X-Case-Key
+    - Idempotency-Key
+  roles:
+    - trader
+    - risk_manager
+    - viewer
   missingOrUnknown:
     httpStatus: 401
     errorCode: UNAUTHENTICATED
@@ -15,56 +22,72 @@ authentication:
 permissions:
   - operation: health
     method: GET
-    path: /actuator/health
-    roles: [ANONYMOUS, TRADER, RISK_MANAGER, APPROVER]
+    path: /api/health
+    roles: [ANONYMOUS, trader, risk_manager, viewer]
   - operation: resetDemo
     method: POST
-    path: /api/demo/reset
-    roles: [TRADER, RISK_MANAGER, APPROVER]
+    path: /api/test/reset
+    roles: [trader, risk_manager, viewer]
     profile: demo
   - operation: readMarketData
     method: GET
     path: /api/market-data
-    roles: [TRADER, RISK_MANAGER, APPROVER]
+    roles: [trader, risk_manager, viewer]
+  - operation: readMarketAlias
+    method: GET
+    path: /api/market
+    roles: [trader, risk_manager, viewer]
   - operation: readPortfolios
     method: GET
     path: /api/portfolios
-    roles: [TRADER, RISK_MANAGER, APPROVER]
+    roles: [trader, risk_manager, viewer]
   - operation: createTrade
     method: POST
     path: /api/trades
-    roles: [TRADER]
+    roles: [trader]
   - operation: listTrades
     method: GET
     path: /api/trades
-    roles: [TRADER, RISK_MANAGER, APPROVER]
+    roles: [trader, risk_manager, viewer]
   - operation: readTrade
     method: GET
     path: /api/trades/{id}
-    roles: [TRADER, RISK_MANAGER, APPROVER]
+    roles: [trader, risk_manager, viewer]
   - operation: valueTrade
     method: GET
     path: /api/trades/{id}/valuation
-    roles: [TRADER, RISK_MANAGER, APPROVER]
+    roles: [trader, risk_manager, viewer]
   - operation: submitTrade
     method: POST
     path: /api/trades/{id}/submit
-    roles: [TRADER]
+    roles: [trader]
   - operation: approveTrade
     method: POST
     path: /api/trades/{id}/approve
-    roles: [APPROVER]
+    roles: [risk_manager]
   - operation: rejectTrade
     method: POST
     path: /api/trades/{id}/reject
-    roles: [APPROVER]
+    roles: [risk_manager]
+  - operation: listApprovals
+    method: GET
+    path: /api/approvals
+    roles: [risk_manager, viewer]
+  - operation: approveViaApprovals
+    method: POST
+    path: /api/approvals/{id}/approve
+    roles: [risk_manager]
+  - operation: rejectViaApprovals
+    method: POST
+    path: /api/approvals/{id}/reject
+    roles: [risk_manager]
   - operation: readRisk
     method: GET
     path: /api/risk/portfolios/{portfolioCode}
-    roles: [RISK_MANAGER]
+    roles: [risk_manager]
   - operation: readAudit
     method: GET
     path: /api/audit-events
-    roles: [TRADER, RISK_MANAGER, APPROVER]
+    roles: [trader, risk_manager, viewer]
 
 defaultPolicy: DENY

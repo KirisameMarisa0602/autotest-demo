@@ -30,7 +30,7 @@ public class SecurityConfig {
     @Bean
     SecurityFilterChain securityFilterChain(
             HttpSecurity http,
-            BearerTokenFilter bearerTokenFilter,
+            DemoIdentityFilter demoIdentityFilter,
             ObjectMapper objectMapper,
             Clock clock,
             CorsConfigurationSource corsConfigurationSource
@@ -42,7 +42,8 @@ public class SecurityConfig {
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
+                        .requestMatchers("/api/health", "/actuator/health", "/actuator/health/**")
+                        .permitAll()
                         .requestMatchers("/error").permitAll()
                         .requestMatchers("/api/**").authenticated()
                         .anyRequest().denyAll())
@@ -50,12 +51,12 @@ public class SecurityConfig {
                         .authenticationEntryPoint((request, response, exception) ->
                                 writeSecurityError(objectMapper, clock, response,
                                         request.getRequestURI(), 401, "UNAUTHENTICATED",
-                                        "A valid demo bearer token is required"))
+                                        "Valid X-Demo-User and X-Demo-Role headers are required"))
                         .accessDeniedHandler((request, response, exception) ->
                                 writeSecurityError(objectMapper, clock, response,
                                         request.getRequestURI(), 403, "FORBIDDEN",
                                         "The current demo identity is not permitted")))
-                .addFilterBefore(bearerTokenFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(demoIdentityFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
 
@@ -69,7 +70,14 @@ public class SecurityConfig {
                 .filter(value -> !value.isBlank())
                 .toList());
         configuration.setAllowedMethods(List.of("GET", "POST", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Idempotency-Key"));
+        configuration.setAllowedHeaders(List.of(
+                "Content-Type",
+                "Idempotency-Key",
+                DemoIdentityFilter.HEADER_USER,
+                DemoIdentityFilter.HEADER_ROLE,
+                DemoIdentityFilter.HEADER_RUN_ID,
+                DemoIdentityFilter.HEADER_CASE_KEY
+        ));
         configuration.setExposedHeaders(List.of("Location"));
         configuration.setAllowCredentials(false);
         var source = new UrlBasedCorsConfigurationSource();

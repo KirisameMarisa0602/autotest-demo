@@ -30,9 +30,9 @@ function logout() {
         data-testid="global-role-switcher"
         @change="changeRole"
       >
-        <option value="TRADER">TRADER</option>
-        <option value="APPROVER">APPROVER</option>
-        <option value="RISK_MANAGER">RISK_MANAGER</option>
+        <option value="trader">trader</option>
+        <option value="risk_manager">risk_manager</option>
+        <option value="viewer">viewer</option>
       </select>
       <button data-testid="logout-button" type="button" @click="logout">退出</button>
     </div>

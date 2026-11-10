@@ -8,17 +8,18 @@ describe('auth store', () => {
     setActivePinia(createPinia())
   })
 
-  it('maps a selected role to its fixed demo token and clears it on logout', () => {
+  it('maps a selected role to its fixed demo user and clears it on logout', () => {
     const store = useAuthStore()
 
-    store.switchRole('RISK_MANAGER')
+    store.switchRole('risk_manager')
 
-    expect(store.role).toBe('RISK_MANAGER')
+    expect(store.role).toBe('risk_manager')
+    expect(store.user).toBe('bob')
     expect(store.isAuthenticated).toBe(true)
-    expect(localStorage.getItem('demo-token')).toBe('risk-token')
+    expect(localStorage.getItem('demo-user')).toBe('bob')
 
     store.logout()
     expect(store.isAuthenticated).toBe(false)
-    expect(localStorage.getItem('demo-token')).toBeNull()
+    expect(localStorage.getItem('demo-user')).toBeNull()
   })
 })

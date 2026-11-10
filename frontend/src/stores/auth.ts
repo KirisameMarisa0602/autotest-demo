@@ -2,38 +2,39 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import type { Role } from '../types'
 
-const TOKENS: Record<Role, string> = {
-  TRADER: 'trader-token',
-  RISK_MANAGER: 'risk-token',
-  APPROVER: 'approver-token',
+const USERS: Record<Role, string> = {
+  trader: 'alice',
+  risk_manager: 'bob',
+  viewer: 'carol',
 }
 
 function savedRole(): Role | null {
   const value = localStorage.getItem('demo-role')
-  return value === 'TRADER' || value === 'RISK_MANAGER' || value === 'APPROVER'
+  return value === 'trader' || value === 'risk_manager' || value === 'viewer'
     ? value
     : null
 }
 
 export const useAuthStore = defineStore('auth', () => {
   const role = ref<Role | null>(savedRole())
+  const user = computed(() => (role.value ? USERS[role.value] : null))
   const isAuthenticated = computed(() => role.value !== null)
 
   function switchRole(nextRole: Role) {
     role.value = nextRole
     localStorage.setItem('demo-role', nextRole)
-    localStorage.setItem('demo-token', TOKENS[nextRole])
+    localStorage.setItem('demo-user', USERS[nextRole])
   }
 
   function logout() {
     role.value = null
     localStorage.removeItem('demo-role')
-    localStorage.removeItem('demo-token')
+    localStorage.removeItem('demo-user')
   }
 
   if (role.value) {
-    localStorage.setItem('demo-token', TOKENS[role.value])
+    localStorage.setItem('demo-user', USERS[role.value])
   }
 
-  return { role, isAuthenticated, switchRole, logout }
+  return { role, user, isAuthenticated, switchRole, logout }
 })

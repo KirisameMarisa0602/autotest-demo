@@ -36,7 +36,7 @@ public class TradeController {
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('TRADER')")
+    @PreAuthorize("hasRole('trader')")
     ResponseEntity<TradeResponse> create(
             @RequestHeader("Idempotency-Key") @NotBlank @Size(max = 100) String idempotencyKey,
             @Valid @RequestBody CreateTradeRequest request
@@ -50,6 +50,7 @@ public class TradeController {
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('trader', 'risk_manager', 'viewer')")
     List<TradeResponse> findAll(
             @RequestParam(required = false) String portfolioCode
     ) {
@@ -57,17 +58,19 @@ public class TradeController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('trader', 'risk_manager', 'viewer')")
     TradeResponse find(@PathVariable UUID id) {
         return tradeService.find(id);
     }
 
     @GetMapping("/{id}/valuation")
+    @PreAuthorize("hasAnyRole('trader', 'risk_manager', 'viewer')")
     ValuationResponse value(@PathVariable UUID id) {
         return tradeService.value(id);
     }
 
     @PostMapping("/{id}/submit")
-    @PreAuthorize("hasRole('TRADER')")
+    @PreAuthorize("hasRole('trader')")
     TradeResponse submit(
             @PathVariable UUID id,
             @Valid @RequestBody TransitionRequest request
@@ -76,7 +79,7 @@ public class TradeController {
     }
 
     @PostMapping("/{id}/approve")
-    @PreAuthorize("hasRole('APPROVER')")
+    @PreAuthorize("hasRole('risk_manager')")
     TradeResponse approve(
             @PathVariable UUID id,
             @Valid @RequestBody DecisionRequest request
@@ -85,7 +88,7 @@ public class TradeController {
     }
 
     @PostMapping("/{id}/reject")
-    @PreAuthorize("hasRole('APPROVER')")
+    @PreAuthorize("hasRole('risk_manager')")
     TradeResponse reject(
             @PathVariable UUID id,
             @Valid @RequestBody DecisionRequest request

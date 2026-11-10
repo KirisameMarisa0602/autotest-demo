@@ -1,41 +1,30 @@
-# Known deterministic defects
+# Known Defects (intentional)
 
-These defects are intentionally retained so the Playwright automation framework
-can demonstrate product-bug detection, test healing, and specification gaps.
-They must not be treated as green-suite oracles.
+These defects are deterministic fixtures for external automation frameworks.
+Do not “fix” them unless a change task explicitly asks to close the defect.
 
-## KNOWN-BUG-RISK-SHORT-OPTION-SIGN
+## KNOWN-BUG-RISK-SHORT-OPTION-DELTA
 
-- Kind: `product_bug`
-- Location: `backend/src/main/java/com/example/derivatives/risk/RiskService.java`
-- Symptom: portfolio risk aggregation flips SHORT European option PV/Delta back
-  to a LONG-looking sign after `PricingService` already applied `side.sign()`.
-- Independent oracle: `docs/requirements/03-risk-audit-and-known-issues.md` §2
-- Detection: Playwright `defect` project / case `derivatives.api.short-risk`
-- Correct repair: remove the extra SHORT-option negate in risk aggregation only.
+- **Module**: risk aggregation (`GET /api/risk/portfolios/{portfolioCode}`)
+- **Symptom**: For an approved **SHORT European option**, portfolio **Delta** is aggregated **without** the side sign (SHORT is not multiplied by `-1`). The result looks like the LONG-side Delta.
+- **Scope**:
+  - Affects SHORT `EUROPEAN_OPTION` Delta only.
+  - Present Value for the same SHORT option remains correctly signed.
+  - Single-trade valuation (`GET /api/trades/{id}/valuation`) is correct for both PV and Delta.
+  - SHORT `FORWARD` aggregation is correct.
+- **Oracle**: `docs/requirements/03-risk-audit-and-known-issues.md` §2 — portfolio Delta must equal the signed single-trade Delta.
+- **Locator in code**: `backend/.../risk/RiskService.java` short-option Delta branch.
 
-## KNOWN-BUG-UI-SUBMIT-LABEL-EN
+## KNOWN-BUG-UI-APPROVE-TESTID
 
-- Kind: `test_bug` when encoded as a stale generated selector/name
-- Location: trading desk submit control uses Chinese label `提交` and
-  `data-testid="submit-trade"`
-- Symptom: a generated healing candidate that clicks
-  `getByRole('button', { name: 'Submit for approval' })` fails while product UI
-  is correct
-- Independent oracle: `docs/requirements/04-ui-test-contract.md`
-- Detection: Playwright `healing` project /
-  `tests/generated/derivatives-submit.healing.spec.ts`
-- Correct repair: heal the generated locator/name only; do not change product
-  oracle text.
+- **Module**: frontend approval desk
+- **Symptom**: The approve button still exposes the stale locator `data-testid="approve-trade-old"` instead of the contract name `approve-trade`.
+- **Oracle**: `docs/requirements/04-ui-test-contract.md` lists `approve-trade` as the stable selector; the live DOM intentionally diverges.
+- **Locator in code**: `frontend/src/views/ApprovalDeskView.vue`.
 
-## KNOWN-SPEC-GAP-SAME-DAY-EXPIRY
+## SPEC-GAP-SAME-DAY-EXPIRY-TIMEZONE
 
-- Kind: `spec_gap`
-- Location: `PricingService` uses local-date day count and clamps same-day tenor
-  to one day
-- Symptom: UTC vs local calendar cut-over for “today maturity” is intentionally
-  underspecified
-- Independent oracle gap: coverage target `boundary.same-day-expiry` remains
-  `pending`
-- Detection: planner/generator must exclude or escalate rather than invent an
-  oracle
+- **Module**: trade validation + pricing day count
+- **Symptom / ambiguity**: When `maturity` equals “today”, the implementation compares dates using the **JVM local timezone** (`ZoneId.systemDefault()`), while demo Clock / documented business instant is UTC (`2026-01-15T10:00:00Z`).
+- **Requirement stance**: UTC vs local is intentionally unresolved. Tests must not assert normative PV/Delta/accept-reject behavior for same-day maturity.
+- **Oracle**: `docs/requirements/02-trading-and-pricing.md` §5.

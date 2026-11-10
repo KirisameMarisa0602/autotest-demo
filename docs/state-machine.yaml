@@ -12,7 +12,7 @@ states:
       - action: submit
         method: POST
         path: /api/trades/{id}/submit
-        actorRole: TRADER
+        actorRole: trader
         target: SUBMITTED
         request:
           required:
@@ -26,7 +26,9 @@ states:
       - action: approve
         method: POST
         path: /api/trades/{id}/approve
-        actorRole: APPROVER
+        alternatePaths:
+          - /api/approvals/{id}/approve
+        actorRole: risk_manager
         target: APPROVED
         request:
           required:
@@ -39,7 +41,9 @@ states:
       - action: reject
         method: POST
         path: /api/trades/{id}/reject
-        actorRole: APPROVER
+        alternatePaths:
+          - /api/approvals/{id}/reject
+        actorRole: risk_manager
         target: REJECTED
         request:
           required:

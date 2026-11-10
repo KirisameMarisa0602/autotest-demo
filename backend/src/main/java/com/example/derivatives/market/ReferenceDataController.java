@@ -1,6 +1,7 @@
 package com.example.derivatives.market;
 
 import com.example.derivatives.portfolio.PortfolioRepository;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -23,7 +24,8 @@ public class ReferenceDataController {
         this.portfolioRepository = portfolioRepository;
     }
 
-    @GetMapping("/market-data")
+    @GetMapping({"/market-data", "/market"})
+    @PreAuthorize("hasAnyRole('trader', 'risk_manager', 'viewer')")
     List<MarketDataResponse> marketData() {
         return marketRepository.findAll().stream()
                 .map(snapshot -> new MarketDataResponse(
@@ -36,6 +38,7 @@ public class ReferenceDataController {
     }
 
     @GetMapping("/portfolios")
+    @PreAuthorize("hasAnyRole('trader', 'risk_manager', 'viewer')")
     List<PortfolioResponse> portfolios() {
         return portfolioRepository.findAll().stream()
                 .map(portfolio -> new PortfolioResponse(portfolio.getCode(), portfolio.getName()))

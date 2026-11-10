@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/demo")
+@RequestMapping("/api/test")
 @Profile("demo")
 public class DemoDataController {
     private final DemoDataService demoDataService;
@@ -20,7 +20,7 @@ public class DemoDataController {
     }
 
     @PostMapping("/reset")
-    @PreAuthorize("hasAnyRole('TRADER', 'RISK_MANAGER', 'APPROVER')")
+    @PreAuthorize("hasAnyRole('trader', 'risk_manager', 'viewer')")
     DemoDataService.ResetResponse reset() {
         return demoDataService.reset();
     }

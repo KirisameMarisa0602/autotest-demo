@@ -20,13 +20,13 @@
 
 ## Demo 身份
 
-请求使用固定 token：
+请求使用演示头：
 
-- `Bearer trader-token` → `TRADER`
-- `Bearer approver-token` → `APPROVER`
-- `Bearer risk-token` → `RISK_MANAGER`
+- `X-Demo-User: alice` + `X-Demo-Role: trader`
+- `X-Demo-User: bob` + `X-Demo-Role: risk_manager`
+- `X-Demo-User: carol` + `X-Demo-Role: viewer`
 
-前端登录页只是在这些身份间切换，API client 会自动添加 token。这不是安全认证方案，不得照搬到生产系统。
+可选追踪头：`X-Run-Id`、`X-Case-Key`。审批与风险读取均由 `risk_manager` 完成。这不是安全认证方案，不得照搬到生产系统。
 
 ## 核心业务链
 

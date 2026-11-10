@@ -10,7 +10,7 @@
 - `underlying`：已有市场快照的代码，只允许大写字母、数字、点和连字符，最长 40 字符。
 - `quantity`：大于 0，最多 12 位整数和 6 位小数。
 - `strike`：大于 0。对期权表示执行价，对远期表示交割价；最多 12 位整数和 6 位小数。
-- `maturity`：早于 demo 业务日期时必须拒绝；等于业务日期时适用第 5 节的 spec gap，测试不得推断其结果。
+- `maturity`：早于“今日”时必须拒绝；等于“今日”时适用第 5 节的 spec gap，测试不得推断其结果。
 - `optionType`：欧式期权必须为 `CALL` 或 `PUT`；远期必须省略。
 
 创建成功返回 HTTP 201、`Location: /api/trades/{id}`，初始状态为 `DRAFT`，初始 `version=0`。
@@ -27,8 +27,8 @@
 
 权威迁移见 `docs/state-machine.yaml`。
 
-- `DRAFT` 只能由 `TRADER` 提交为 `SUBMITTED`。
-- `SUBMITTED` 只能由 `APPROVER` 批准为 `APPROVED`，或拒绝为 `REJECTED`。
+- `DRAFT` 只能由 `trader` 提交为 `SUBMITTED`。
+- `SUBMITTED` 只能由 `risk_manager` 批准为 `APPROVED`，或拒绝为 `REJECTED`。
 - `APPROVED`、`REJECTED` 为终态。
 - 每个迁移请求都必须携带 `expectedVersion`。它必须与响应中的当前 `version` 完全相等。
 - 成功迁移使 `version` 加 1。
@@ -36,9 +36,11 @@
 - 不允许的迁移返回 HTTP 409、`INVALID_TRANSITION`，不得改变交易。
 - 拒绝必须提供非空 `comment`；批准的 `comment` 可省略。意见最长 500 字符。
 
+审批也可通过 `/api/approvals` 队列端点完成，语义与 `/api/trades/{id}/approve|reject` 相同。
+
 ## 4. 单笔定价 oracle
 
-单笔估值端点对所有有效身份开放。输出 `presentValue`、`delta`、`currency=USD` 和市场快照时间。以下规则适用于到期日在业务日期之后的交易：
+单笔估值端点对 `trader`、`risk_manager`、`viewer` 开放。输出 `presentValue`、`delta`、`currency=USD` 和市场快照时间。以下规则适用于到期日在业务日期之后的交易：
 
 设：
 
@@ -67,10 +69,13 @@
 
 因此，在其他字段相同的情况下，SHORT 单笔估值的 PV 和 Delta 必须是 LONG 的相反数。
 
-## 5. 尚未批准的需求空白：同日到期
+## 5. 尚未批准的需求空白：同日到期与时区
 
-`maturity` 等于 demo 业务日期时应采用到期内在价值、日终前剩余时间，还是最小一天期限，目前没有业务批准结论。
+`maturity` 等于“今日”时应采用到期内在价值、日终前剩余时间，还是最小一天期限，目前没有业务批准结论。
+
+同时，**“今日”究竟按 UTC 业务时钟还是按运行环境本地时区解释**也尚未拍板。需求故意保持模糊：
 
 - 这是明确的 **spec gap**，不是可由开发者自行修复的 bug。
 - 测试不得对同日到期的 PV、Delta 或创建是否应接受作出规范性断言。
 - 当前实现表现不构成 oracle；未来必须先更新本需求，再更新实现和测试。
+- 详见 `docs/KNOWN-DEFECTS.md` 中的 `SPEC-GAP-SAME-DAY-EXPIRY-TIMEZONE`。

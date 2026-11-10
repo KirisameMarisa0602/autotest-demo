@@ -77,7 +77,7 @@ function showError(reason: unknown) {
         maxlength="500"
       />
       <div class="actions">
-        <button type="button" data-testid="approve-trade" @click="approve(trade)">批准</button>
+        <button type="button" data-testid="approve-trade-old" @click="approve(trade)">批准</button>
         <button
           class="danger"
           type="button"

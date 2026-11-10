@@ -16,7 +16,7 @@ public class RiskController {
     }
 
     @GetMapping("/{portfolioCode}")
-    @PreAuthorize("hasRole('RISK_MANAGER')")
+    @PreAuthorize("hasRole('risk_manager')")
     RiskService.RiskReport report(@PathVariable String portfolioCode) {
         return riskService.report(portfolioCode);
     }

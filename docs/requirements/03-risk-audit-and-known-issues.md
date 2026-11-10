@@ -2,7 +2,7 @@
 
 ## 1. 风险组合范围
 
-`GET /api/risk/portfolios/{portfolioCode}` 只聚合该组合中状态为 `APPROVED` 的交易。`DRAFT`、`SUBMITTED`、`REJECTED` 均不得计入。
+`GET /api/risk/portfolios/{portfolioCode}` 只聚合该组合中状态为 `APPROVED` 的交易。`DRAFT`、`SUBMITTED`、`REJECTED` 均不得计入。仅 `risk_manager` 可调用。
 
 返回：
 
@@ -33,14 +33,16 @@
 
 ## 4. 已知确定性产品缺陷
 
-当前基线故意保留缺陷 `KNOWN-BUG-RISK-SHORT-OPTION-SIGN`：风险聚合在处理 SHORT 欧式期权时遗漏方向符号，把它当作 LONG 聚合。单笔估值端点没有此缺陷，SHORT forward 也没有此缺陷。
+当前基线故意保留缺陷 `KNOWN-BUG-RISK-SHORT-OPTION-DELTA`：风险聚合在处理 SHORT 欧式期权时，**Delta 遗漏方向符号（未乘 -1）**，把它当作 LONG Delta 聚合。PV 方向正确；单笔估值端点没有此缺陷；SHORT forward 也没有此缺陷。
 
 这是供外部测试框架发现的确定性 product bug：
 
 - 普通 green 单元/集成测试不得把错误结果断言为正确，也不得用 disabled JUnit 测试掩盖它。
 - 默认 green 套件不执行该缺陷用例。
-- 外部 Playwright/API 回归可执行 `RISK-SHORT-OPTION-DIRECTION`，并应按照第 2 节权威期望失败，从而报告产品缺陷。
+- 外部 Playwright/API 回归可按第 2 节权威期望失败，从而报告产品缺陷。
 - 不应在没有显式变更任务时自动修复该缺陷。
+
+完整清单见 `docs/KNOWN-DEFECTS.md`。
 
 ## 5. 审计事件
 
@@ -55,7 +57,7 @@
 事件字段为 `id`、`eventType`、`aggregateType`、`aggregateId`、`actor`、`occurredAt`、`details`。
 
 - 交易动作的 `aggregateType=TRADE`、`aggregateId=trade.id`。
-- actor 为执行动作的角色名：`TRADER` 或 `APPROVER`；启动时重置可为 `SYSTEM`。
+- actor 为执行动作的 `user/role` 形式；启动时重置可为 `SYSTEM`。
 - 幂等重放、失败校验、拒绝访问、版本冲突和非法迁移不得新增审计事件。
 - reset 必须先删除旧审计，再产生一条新的 `DEMO_RESET`。
 - 查询按 `occurredAt` 倒序；固定 Clock 导致时间相同时，事件间顺序不作保证，测试应按类型和 aggregate id 匹配。

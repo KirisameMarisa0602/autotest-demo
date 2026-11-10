@@ -16,6 +16,7 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
@@ -165,9 +166,12 @@ public class TradeService {
             throw new ApiException(HttpStatus.NOT_FOUND, "MARKET_DATA_NOT_FOUND",
                     "No market snapshot exists for " + request.underlying());
         }
-        if (request.maturity().isBefore(LocalDate.now(clock))) {
+        // SPEC GAP: maturity vs "today" is compared in the JVM local timezone.
+        // Docs intentionally leave UTC vs local unresolved; demo Clock zone is not used here.
+        LocalDate todayLocal = LocalDate.now(ZoneId.systemDefault());
+        if (request.maturity().isBefore(todayLocal)) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR",
-                    "maturity must not be before the demo business date");
+                    "maturity must not be before today (local timezone comparison)");
         }
         if (request.tradeType() == Trade.TradeType.EUROPEAN_OPTION
                 && request.optionType() == null) {

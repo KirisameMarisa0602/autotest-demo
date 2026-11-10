@@ -18,9 +18,21 @@ export async function apiFetch<T>(
   options: RequestInit = {},
 ): Promise<T> {
   const headers = new Headers(options.headers)
-  const token = localStorage.getItem('demo-token')
-  if (token) {
-    headers.set('Authorization', `Bearer ${token}`)
+  const user = localStorage.getItem('demo-user')
+  const role = localStorage.getItem('demo-role')
+  if (user) {
+    headers.set('X-Demo-User', user)
+  }
+  if (role) {
+    headers.set('X-Demo-Role', role)
+  }
+  const runId = localStorage.getItem('demo-run-id')
+  if (runId) {
+    headers.set('X-Run-Id', runId)
+  }
+  const caseKey = localStorage.getItem('demo-case-key')
+  if (caseKey) {
+    headers.set('X-Case-Key', caseKey)
   }
   if (options.body && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json')

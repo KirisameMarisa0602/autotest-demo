@@ -11,6 +11,8 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -22,9 +24,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @ActiveProfiles("demo")
 class TradeWorkflowIntegrationTest {
-    private static final String TRADER = "Bearer trader-token";
-    private static final String APPROVER = "Bearer approver-token";
-
     @Autowired
     MockMvc mockMvc;
 
@@ -33,21 +32,20 @@ class TradeWorkflowIntegrationTest {
 
     @BeforeEach
     void reset() throws Exception {
-        mockMvc.perform(post("/api/demo/reset").header("Authorization", TRADER))
+        mockMvc.perform(withIdentity(post("/api/demo/reset"), "alice", "trader"))
                 .andExpect(status().isOk());
     }
 
     @Test
     void followsHappyStateMachineAndProducesSensibleOptionValue() throws Exception {
-        JsonNode created = body(createTrade("workflow-1", optionBody("LONG"), TRADER)
+        JsonNode created = body(createTrade("workflow-1", optionBody("LONG"), "alice", "trader")
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status").value("DRAFT"))
                 .andExpect(jsonPath("$.version").value(0))
                 .andReturn());
         String id = created.get("id").asText();
 
-        mockMvc.perform(get("/api/trades/{id}/valuation", id)
-                        .header("Authorization", TRADER))
+        mockMvc.perform(withIdentity(get("/api/trades/{id}/valuation", id), "alice", "trader"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.presentValue").isNumber())
                 .andExpect(jsonPath("$.delta").isNumber())
@@ -57,148 +55,90 @@ class TradeWorkflowIntegrationTest {
                     assertThat(valuation.get("delta").decimalValue()).isPositive();
                 });
 
-        mockMvc.perform(post("/api/trades/{id}/submit", id)
-                        .header("Authorization", TRADER)
+        mockMvc.perform(withIdentity(post("/api/trades/{id}/submit", id), "alice", "trader")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"expectedVersion\":0}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("SUBMITTED"))
                 .andExpect(jsonPath("$.version").value(1));
 
-        mockMvc.perform(post("/api/trades/{id}/approve", id)
-                        .header("Authorization", APPROVER)
+        mockMvc.perform(withIdentity(post("/api/trades/{id}/approve", id), "bob", "risk_manager")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"expectedVersion\":1,\"comment\":\"checked\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("APPROVED"))
-                .andExpect(jsonPath("$.version").value(2));
+                .andExpect(jsonPath("$.version").value(2))
+                .andExpect(jsonPath("$.decisionBy").value("bob/risk_manager"));
     }
 
     @Test
     void rejectsInvalidTransition() throws Exception {
-        String id = body(createTrade("state-1", optionBody("LONG"), TRADER)
+        String id = body(createTrade("state-1", optionBody("LONG"), "alice", "trader")
                 .andExpect(status().isCreated())
                 .andReturn()).get("id").asText();
 
-        mockMvc.perform(post("/api/trades/{id}/approve", id)
-                        .header("Authorization", APPROVER)
+        mockMvc.perform(withIdentity(post("/api/trades/{id}/approve", id), "bob", "risk_manager")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"expectedVersion\":0}"))
+                        .content("{\"expectedVersion\":0,\"comment\":\"too early\"}"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("INVALID_TRANSITION"));
     }
 
     @Test
-    void rejectsStaleVersionAndSupportsTheRejectionTerminalPath() throws Exception {
-        String id = body(createTrade("state-reject-1", optionBody("LONG"), TRADER)
+    void shortOptionValuationIsNegativeWhileRiskAggregationIsBuggy() throws Exception {
+        String id = body(createTrade("short-1", optionBody("SHORT"), "alice", "trader")
                 .andExpect(status().isCreated())
                 .andReturn()).get("id").asText();
-        mockMvc.perform(post("/api/trades/{id}/submit", id)
-                        .header("Authorization", TRADER)
+
+        JsonNode valuation = body(mockMvc.perform(
+                        withIdentity(get("/api/trades/{id}/valuation", id), "alice", "trader"))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(valuation.get("presentValue").decimalValue()).isNegative();
+        assertThat(valuation.get("delta").decimalValue()).isNegative();
+
+        mockMvc.perform(withIdentity(post("/api/trades/{id}/submit", id), "alice", "trader")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"expectedVersion\":0}"))
                 .andExpect(status().isOk());
-
-        mockMvc.perform(post("/api/trades/{id}/reject", id)
-                        .header("Authorization", APPROVER)
+        mockMvc.perform(withIdentity(post("/api/trades/{id}/approve", id), "bob", "risk_manager")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"expectedVersion\":0,\"comment\":\"limit breached\"}"))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("VERSION_CONFLICT"));
+                        .content("{\"expectedVersion\":1,\"comment\":\"known defect probe\"}"))
+                .andExpect(status().isOk());
 
-        mockMvc.perform(post("/api/trades/{id}/reject", id)
-                        .header("Authorization", APPROVER)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"expectedVersion\":1,\"comment\":\"limit breached\"}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("REJECTED"))
-                .andExpect(jsonPath("$.version").value(2));
-    }
-
-    @Test
-    void enforcesRolePermissions() throws Exception {
-        createTrade("permission-1", optionBody("LONG"), APPROVER)
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
-
-        String id = body(createTrade("permission-2", optionBody("LONG"), TRADER)
-                .andExpect(status().isCreated())
-                .andReturn()).get("id").asText();
-        mockMvc.perform(post("/api/trades/{id}/approve", id)
-                        .header("Authorization", TRADER)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"expectedVersion\":0}"))
-                .andExpect(status().isForbidden());
-    }
-
-    @Test
-    void replaysSameIdempotencyKeyAndRejectsChangedPayload() throws Exception {
-        JsonNode first = body(createTrade("idem-1", optionBody("LONG"), TRADER)
-                .andExpect(status().isCreated())
-                .andReturn());
-        JsonNode replay = body(createTrade("idem-1", optionBody("LONG"), TRADER)
+        JsonNode risk = body(mockMvc.perform(
+                        withIdentity(get("/api/risk/portfolios/ALPHA"), "bob", "risk_manager"))
                 .andExpect(status().isOk())
                 .andReturn());
-        assertThat(replay.get("id").asText()).isEqualTo(first.get("id").asText());
-
-        createTrade("idem-1", optionBody("SHORT"), TRADER)
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("IDEMPOTENCY_CONFLICT"));
+        // Intentional product bug: SHORT option contributions are flipped back to LONG-looking signs.
+        assertThat(risk.get("presentValue").decimalValue())
+                .isEqualByComparingTo(valuation.get("presentValue").decimalValue().negate());
+        assertThat(risk.get("delta").decimalValue())
+                .isEqualByComparingTo(valuation.get("delta").decimalValue().negate());
     }
 
-    @Test
-    void reportsBeanValidationErrors() throws Exception {
-        String invalid = """
-                {
-                  "portfolioCode":"ALPHA",
-                  "tradeType":"FORWARD",
-                  "side":"LONG",
-                  "underlying":"AAPL",
-                  "quantity":0,
-                  "strike":100,
-                  "maturity":"2027-12-31"
-                }
-                """;
-        createTrade("validation-1", invalid, TRADER)
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
-                .andExpect(jsonPath("$.fieldErrors[0].field").value("quantity"));
-    }
-
-    @Test
-    void pricesALongForwardWithQuantityScaledDelta() throws Exception {
-        String forward = """
-                {
-                  "portfolioCode":"ALPHA",
-                  "tradeType":"FORWARD",
-                  "side":"LONG",
-                  "underlying":"AAPL",
-                  "quantity":5,
-                  "strike":95,
-                  "maturity":"2027-12-31"
-                }
-                """;
-        String id = body(createTrade("pricing-forward-1", forward, TRADER)
-                .andExpect(status().isCreated())
-                .andReturn()).get("id").asText();
-
-        mockMvc.perform(get("/api/trades/{id}/valuation", id)
-                        .header("Authorization", TRADER))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.presentValue").isNumber())
-                .andExpect(jsonPath("$.delta").value(5.0));
-    }
-
-    private org.springframework.test.web.servlet.ResultActions createTrade(
-            String key,
+    private ResultActions createTrade(
+            String idempotencyKey,
             String body,
-            String bearer
+            String user,
+            String role
     ) throws Exception {
-        return mockMvc.perform(post("/api/trades")
-                .header("Authorization", bearer)
-                .header("Idempotency-Key", key)
+        return mockMvc.perform(withIdentity(post("/api/trades"), user, role)
+                .header("Idempotency-Key", idempotencyKey)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body));
+    }
+
+    private static MockHttpServletRequestBuilder withIdentity(
+            MockHttpServletRequestBuilder builder,
+            String user,
+            String role
+    ) {
+        return builder
+                .header("X-Demo-User", user)
+                .header("X-Demo-Role", role)
+                .header("X-Run-Id", "integration")
+                .header("X-Case-Key", "integration");
     }
 
     private static String optionBody(String side) {

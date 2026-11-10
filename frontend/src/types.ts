@@ -1,4 +1,4 @@
-export type Role = 'TRADER' | 'RISK_MANAGER' | 'APPROVER'
+export type Role = 'trader' | 'risk_manager' | 'viewer'
 export type TradeType = 'EUROPEAN_OPTION' | 'FORWARD'
 export type Side = 'LONG' | 'SHORT'
 export type OptionType = 'CALL' | 'PUT'
