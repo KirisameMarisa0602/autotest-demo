@@ -7,6 +7,7 @@ import type { CreateTrade } from '../types'
 const store = useTradesStore()
 const error = ref('')
 const message = ref('')
+const statusFilter = ref('')
 const idempotencyKey = ref(`ui-${Date.now()}`)
 const form = reactive<CreateTrade>({
   portfolioCode: 'ALPHA',
@@ -24,7 +25,7 @@ onMounted(refresh)
 async function refresh() {
   error.value = ''
   try {
-    await store.load(form.portfolioCode)
+    await store.load(form.portfolioCode, statusFilter.value)
   } catch (reason) {
     showError(reason)
   }
@@ -149,11 +150,25 @@ function showError(reason: unknown) {
         <button class="secondary" type="button" data-testid="refresh-trades" @click="refresh">
           刷新
         </button>
+        <label for="status-filter">状态筛选</label>
+        <select
+          id="status-filter"
+          v-model="statusFilter"
+          data-testid="trade-status-filter"
+          @change="refresh"
+        >
+          <option value="">全部</option>
+          <option value="DRAFT">DRAFT</option>
+          <option value="SUBMITTED">SUBMITTED</option>
+          <option value="APPROVED">APPROVED</option>
+          <option value="REJECTED">REJECTED</option>
+        </select>
       </div>
     </form>
 
     <p v-if="error" class="error" role="alert" data-testid="trade-error">{{ error }}</p>
     <p v-if="message" class="success" role="status" data-testid="trade-message">{{ message }}</p>
+    <p data-testid="trade-total">共 {{ store.totalItems }} 笔</p>
 
     <div class="panel">
       <h3>交易</h3>

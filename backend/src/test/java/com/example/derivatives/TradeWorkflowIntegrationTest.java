@@ -217,6 +217,88 @@ class TradeWorkflowIntegrationTest {
                 .andExpect(jsonPath("$.delta").value(5.0));
     }
 
+    @Test
+    void paginatesAndFiltersTheTradeList() throws Exception {
+        for (int index = 0; index < 3; index += 1) {
+            createTrade("paging-" + index, optionBody("LONG"), TRADER_USER, TRADER_ROLE)
+                    .andExpect(status().isCreated());
+        }
+        String submittedId = body(createTrade("paging-submitted", optionBody("LONG"),
+                TRADER_USER, TRADER_ROLE)
+                .andExpect(status().isCreated())
+                .andReturn()).get("id").asText();
+        mockMvc.perform(post("/api/trades/{id}/submit", submittedId)
+                        .header("X-Demo-User", TRADER_USER)
+                        .header("X-Demo-Role", TRADER_ROLE)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"expectedVersion\":0}"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/trades")
+                        .param("size", "2")
+                        .header("X-Demo-User", VIEWER_USER)
+                        .header("X-Demo-Role", VIEWER_ROLE))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(2))
+                .andExpect(jsonPath("$.totalItems").value(4))
+                .andExpect(jsonPath("$.totalPages").value(2))
+                .andExpect(jsonPath("$.items.length()").value(2));
+
+        mockMvc.perform(get("/api/trades")
+                        .param("status", "SUBMITTED")
+                        .header("X-Demo-User", VIEWER_USER)
+                        .header("X-Demo-Role", VIEWER_ROLE))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalItems").value(1))
+                .andExpect(jsonPath("$.items[0].id").value(submittedId));
+
+        mockMvc.perform(get("/api/trades")
+                        .param("page", "9")
+                        .header("X-Demo-User", VIEWER_USER)
+                        .header("X-Demo-Role", VIEWER_ROLE))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(0))
+                .andExpect(jsonPath("$.totalItems").value(4));
+
+        mockMvc.perform(get("/api/trades")
+                        .param("size", "101")
+                        .header("X-Demo-User", VIEWER_USER)
+                        .header("X-Demo-Role", VIEWER_ROLE))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+
+        mockMvc.perform(get("/api/trades")
+                        .param("status", "BOGUS")
+                        .header("X-Demo-User", VIEWER_USER)
+                        .header("X-Demo-Role", VIEWER_ROLE))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+    }
+
+    @Test
+    void returnsPerTradeAuditHistory() throws Exception {
+        String id = body(createTrade("history-1", optionBody("LONG"), TRADER_USER, TRADER_ROLE)
+                .andExpect(status().isCreated())
+                .andReturn()).get("id").asText();
+        mockMvc.perform(post("/api/trades/{id}/submit", id)
+                        .header("X-Demo-User", TRADER_USER)
+                        .header("X-Demo-Role", TRADER_ROLE)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"expectedVersion\":0}"))
+                .andExpect(status().isOk());
+
+        MvcResult history = mockMvc.perform(get("/api/trades/{id}/history", id)
+                        .header("X-Demo-User", TRADER_USER)
+                        .header("X-Demo-Role", TRADER_ROLE))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].aggregateId").value(id))
+                .andReturn();
+        assertThat(body(history).findValuesAsText("eventType"))
+                .containsExactlyInAnyOrder("TRADE_CREATED", "TRADE_SUBMITTED");
+    }
+
     private ResultActions createTrade(
             String key,
             String body,

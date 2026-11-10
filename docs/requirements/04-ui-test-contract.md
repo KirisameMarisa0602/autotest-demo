@@ -18,7 +18,7 @@
 - 全局身份：`global-role-switcher`、`logout-button`
 - 导航：`nav-trading`、`nav-approvals`、`nav-risk`、`nav-audit`
 - 交易输入：`trade-portfolio`、`trade-type`、`trade-side`、`trade-underlying`、`trade-quantity`、`trade-strike`、`trade-maturity`、`trade-option-type`、`idempotency-key`
-- 交易动作/结果：`create-trade`、`refresh-trades`、`trade-row`、`trade-status`、`submit-trade`、`trade-error`、`trade-message`
+- 交易动作/结果：`create-trade`、`refresh-trades`、`trade-row`、`trade-status`、`submit-trade`、`trade-error`、`trade-message`、`trade-status-filter`、`trade-total`
 - 审批：`approval-row`、`approval-comment`、`approve-trade`、`reject-trade`、`approval-error`
 - 风险：`risk-portfolio`、`load-risk`、`risk-report`、`approved-trade-count`、`risk-pv`、`risk-delta`、`risk-scenario`
 - 审计：`refresh-audit`、`audit-timeline`、`audit-event`

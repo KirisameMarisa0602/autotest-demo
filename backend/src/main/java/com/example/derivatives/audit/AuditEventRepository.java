@@ -7,4 +7,9 @@ import java.util.UUID;
 
 public interface AuditEventRepository extends JpaRepository<AuditEvent, UUID> {
     List<AuditEvent> findAllByOrderByOccurredAtDescIdDesc();
+
+    List<AuditEvent> findByAggregateTypeAndAggregateIdOrderByOccurredAtDescIdDesc(
+            String aggregateType,
+            String aggregateId
+    );
 }

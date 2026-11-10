@@ -78,4 +78,32 @@
 - 这是明确的 **spec gap**，不是可由开发者自行修复的 bug。
 - 测试不得对同日到期的 PV、Delta 或创建是否应接受作出规范性断言。
 - 当前实现表现不构成 oracle；未来必须先更新本需求，再更新实现和测试。
+- 现状补充：定价使用业务时钟（`demo` profile 固定 `2026-01-15T10:00:00Z`），创建校验使用 JVM 本地日期，两处对“今日”的解释不一致；这一不一致本身就是未批准项，不能反过来当规范。
 - 详见 `docs/KNOWN-DEFECTS.md` 中的 `SPEC-GAP-SAME-DAY-EXPIRY-TIMEZONE`。
+
+## 6. 交易列表分页与筛选
+
+`GET /api/trades` 返回分页信封，不是裸数组：
+
+- `items`：当前页的 `Trade` 数组；
+- `page`：请求页，从 `0` 开始；
+- `size`：每页条数；
+- `totalItems`：过滤后的总条数；
+- `totalPages`：`ceil(totalItems / size)`，空集为 `0`。
+
+查询参数：
+
+- `portfolioCode`（可选）：组合不存在时返回 404 `PORTFOLIO_NOT_FOUND`；
+- `status`（可选）：`DRAFT`、`SUBMITTED`、`APPROVED`、`REJECTED`；取值非法时返回 400 `INVALID_REQUEST`；
+- `page`（可选，默认 `0`）：必须 `>= 0`，否则返回 400 `VALIDATION_ERROR`；
+- `size`（可选，默认 `20`）：必须在 `1..100` 之间，否则返回 400 `VALIDATION_ERROR`。
+
+排序为 `createdAt` 降序，时间戳相同时按 `id` 升序。超出范围的 `page` 返回空 `items`，但 `totalItems` 与 `totalPages` 仍反映过滤结果。所有角色可读。
+
+## 7. 单笔交易审计历史
+
+`GET /api/trades/{id}/history` 返回该交易的审计事件数组（字段见 `docs/requirements/03-risk-audit-and-known-issues.md` §5），只包含 `aggregateType=TRADE` 且 `aggregateId` 等于该交易 id 的事件，按 `occurredAt` 倒序、`id` 倒序。
+
+- 交易不存在时返回 404 `TRADE_NOT_FOUND`。
+- 历史只读，任何角色可读，不产生新的审计事件。
+- 该端点属于"实现领先于 `docs/openapi.yaml`"的故意漂移，需求以本节为准；漂移清单见 `docs/KNOWN-DEFECTS.md`。

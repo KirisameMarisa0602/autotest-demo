@@ -34,6 +34,14 @@ export interface CreateTrade {
   optionType?: OptionType
 }
 
+export interface TradePage {
+  items: Trade[]
+  page: number
+  size: number
+  totalItems: number
+  totalPages: number
+}
+
 export interface RiskScenario {
   key: string
   spotShockPct: number

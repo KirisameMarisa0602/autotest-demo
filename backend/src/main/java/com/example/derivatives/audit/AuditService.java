@@ -5,6 +5,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 
 @Service
 public class AuditService {
@@ -36,5 +37,12 @@ public class AuditService {
                 Instant.now(clock),
                 details
         ));
+    }
+
+    public List<AuditEvent> history(String aggregateType, String aggregateId) {
+        return repository.findByAggregateTypeAndAggregateIdOrderByOccurredAtDescIdDesc(
+                aggregateType,
+                aggregateId
+        );
     }
 }

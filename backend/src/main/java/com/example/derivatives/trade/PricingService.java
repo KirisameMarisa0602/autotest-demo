@@ -7,21 +7,24 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 
 @Service
 public class PricingService {
     private static final int OUTPUT_SCALE = 6;
 
+    private final Clock clock;
+
     /**
-     * Clock is retained for Spring wiring parity with other demo services.
-     * Day-count intentionally uses {@link ZoneId#systemDefault()} (spec gap).
+     * Day-count uses the injected business {@link Clock}: the demo profile fixes
+     * it to 2026-01-15T10:00:00Z so pricing is reproducible. The same-day floor
+     * below is demo behavior only and is not an approved oracle (spec gap).
      */
     public PricingService(Clock clock) {
         if (clock == null) {
             throw new IllegalArgumentException("clock is required");
         }
+        this.clock = clock;
     }
 
     public PricingResult price(Trade trade, MarketSnapshot market) {
@@ -32,10 +35,10 @@ public class PricingService {
         double spot = spotOverride.doubleValue();
         double strike = trade.getStrike().doubleValue();
         double rate = market.getRiskFreeRate().doubleValue();
-        // SPEC GAP: "today" for same-day expiry uses the JVM local zone, not the demo Clock zone.
-        // Requirements intentionally leave UTC vs local unresolved; do not treat this as oracle.
-        LocalDate todayLocal = LocalDate.now(ZoneId.systemDefault());
-        long days = ChronoUnit.DAYS.between(todayLocal, trade.getMaturity());
+        // SPEC GAP: same-day maturity day-count convention is not approved.
+        // The suite must not assert same-day PV/Delta; only future maturities are testable.
+        LocalDate businessDate = LocalDate.now(clock);
+        long days = ChronoUnit.DAYS.between(businessDate, trade.getMaturity());
         // Same-day expiry floor of 1 day is current demo behavior only.
         double years = Math.max(days, 1L) / 365.0;
 

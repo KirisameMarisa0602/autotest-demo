@@ -1,6 +1,8 @@
 package com.example.derivatives.trade;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import org.springframework.http.ResponseEntity;
@@ -21,6 +23,8 @@ import java.util.UUID;
 
 import static com.example.derivatives.trade.TradeApiModels.CreateTradeRequest;
 import static com.example.derivatives.trade.TradeApiModels.DecisionRequest;
+import static com.example.derivatives.trade.TradeApiModels.PagedTradesResponse;
+import static com.example.derivatives.trade.TradeApiModels.TradeHistoryEvent;
 import static com.example.derivatives.trade.TradeApiModels.TradeResponse;
 import static com.example.derivatives.trade.TradeApiModels.TransitionRequest;
 import static com.example.derivatives.trade.TradeApiModels.ValuationResponse;
@@ -51,16 +55,25 @@ public class TradeController {
 
     @GetMapping
     @PreAuthorize("hasAnyRole('trader', 'risk_manager', 'viewer')")
-    List<TradeResponse> findAll(
-            @RequestParam(required = false) String portfolioCode
+    PagedTradesResponse findAll(
+            @RequestParam(required = false) String portfolioCode,
+            @RequestParam(required = false) Trade.TradeStatus status,
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size
     ) {
-        return tradeService.findAll(portfolioCode);
+        return tradeService.findAll(portfolioCode, status, page, size);
     }
 
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('trader', 'risk_manager', 'viewer')")
     TradeResponse find(@PathVariable UUID id) {
         return tradeService.find(id);
+    }
+
+    @GetMapping("/{id}/history")
+    @PreAuthorize("hasAnyRole('trader', 'risk_manager', 'viewer')")
+    List<TradeHistoryEvent> history(@PathVariable UUID id) {
+        return tradeService.history(id);
     }
 
     @GetMapping("/{id}/valuation")

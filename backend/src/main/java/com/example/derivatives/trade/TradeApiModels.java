@@ -11,6 +11,7 @@ import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 public final class TradeApiModels {
@@ -70,6 +71,34 @@ public final class TradeApiModels {
             BigDecimal delta,
             String currency,
             Instant marketDataAsOf
+    ) {
+    }
+
+    /**
+     * Page envelope for the trade list. The list contract is intentionally
+     * newer than docs/openapi.yaml so external analyzers have to read the
+     * controller rather than trusting the published contract.
+     */
+    public record PagedTradesResponse(
+            List<TradeResponse> items,
+            int page,
+            int size,
+            int totalItems,
+            int totalPages
+    ) {
+    }
+
+    /**
+     * One audit entry scoped to a single trade aggregate.
+     */
+    public record TradeHistoryEvent(
+            UUID id,
+            String eventType,
+            String aggregateType,
+            String aggregateId,
+            String actor,
+            Instant occurredAt,
+            String details
     ) {
     }
 }

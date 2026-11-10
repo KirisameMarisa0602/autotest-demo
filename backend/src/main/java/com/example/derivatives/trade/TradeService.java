@@ -17,11 +17,14 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
 
 import static com.example.derivatives.trade.TradeApiModels.CreateTradeRequest;
+import static com.example.derivatives.trade.TradeApiModels.PagedTradesResponse;
+import static com.example.derivatives.trade.TradeApiModels.TradeHistoryEvent;
 import static com.example.derivatives.trade.TradeApiModels.TradeResponse;
 import static com.example.derivatives.trade.TradeApiModels.ValuationResponse;
 
@@ -88,14 +91,30 @@ public class TradeService {
     }
 
     @Transactional(readOnly = true)
-    public List<TradeResponse> findAll(String portfolioCode) {
-        if (portfolioCode == null || portfolioCode.isBlank()) {
-            return tradeRepository.findAll().stream().map(this::toResponse).toList();
+    public PagedTradesResponse findAll(
+            String portfolioCode,
+            Trade.TradeStatus status,
+            int page,
+            int size
+    ) {
+        String portfolio = (portfolioCode == null || portfolioCode.isBlank()) ? null : portfolioCode;
+        if (portfolio != null) {
+            requirePortfolio(portfolio);
         }
-        requirePortfolio(portfolioCode);
-        return tradeRepository.findByPortfolioCodeOrderByCreatedAtDesc(portfolioCode).stream()
+        List<Trade> matching = tradeRepository.findAll().stream()
+                .filter(trade -> portfolio == null || trade.getPortfolioCode().equals(portfolio))
+                .filter(trade -> status == null || trade.getStatus() == status)
+                .sorted(Comparator.comparing(Trade::getCreatedAt).reversed()
+                        .thenComparing(trade -> trade.getId().toString()))
+                .toList();
+        int totalItems = matching.size();
+        int totalPages = totalItems == 0 ? 0 : (totalItems + size - 1) / size;
+        int from = (int) Math.min((long) page * size, totalItems);
+        int to = Math.min(from + size, totalItems);
+        List<TradeResponse> items = matching.subList(from, to).stream()
                 .map(this::toResponse)
                 .toList();
+        return new PagedTradesResponse(items, page, size, totalItems, totalPages);
     }
 
     @Transactional(readOnly = true)
@@ -141,6 +160,21 @@ public class TradeService {
         auditService.record("TRADE_REJECTED", "TRADE", id.toString(),
                 "status=REJECTED");
         return toResponse(trade);
+    }
+
+    @Transactional(readOnly = true)
+    public List<TradeHistoryEvent> history(UUID id) {
+        requireTrade(id);
+        return auditService.history("TRADE", id.toString()).stream()
+                .map(event -> new TradeHistoryEvent(
+                        event.getId(),
+                        event.getEventType(),
+                        event.getAggregateType(),
+                        event.getAggregateId(),
+                        event.getActor(),
+                        event.getOccurredAt(),
+                        event.getDetails()))
+                .toList();
     }
 
     @Transactional(readOnly = true)

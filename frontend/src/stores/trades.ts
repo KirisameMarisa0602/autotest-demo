@@ -1,18 +1,21 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import { apiFetch } from '../api/client'
-import type { CreateTrade, Trade } from '../types'
+import type { CreateTrade, Trade, TradePage } from '../types'
 
 export const useTradesStore = defineStore('trades', () => {
   const trades = ref<Trade[]>([])
   const loading = ref(false)
+  const totalItems = ref(0)
 
-  async function load(portfolioCode = 'ALPHA') {
+  async function load(portfolioCode = 'ALPHA', status = '') {
     loading.value = true
     try {
-      trades.value = await apiFetch<Trade[]>(
-        `/trades?portfolioCode=${encodeURIComponent(portfolioCode)}`,
-      )
+      const query = new URLSearchParams({ portfolioCode, size: '100' })
+      if (status) query.set('status', status)
+      const page = await apiFetch<TradePage>(`/trades?${query.toString()}`)
+      trades.value = page.items
+      totalItems.value = page.totalItems
     } finally {
       loading.value = false
     }
@@ -57,5 +60,5 @@ export const useTradesStore = defineStore('trades', () => {
     return trade
   }
 
-  return { trades, loading, load, create, submit, approve, reject }
+  return { trades, loading, totalItems, load, create, submit, approve, reject }
 })

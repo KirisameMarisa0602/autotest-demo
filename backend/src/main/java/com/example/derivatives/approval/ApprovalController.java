@@ -30,9 +30,7 @@ public class ApprovalController {
     @GetMapping
     @PreAuthorize("hasAnyRole('risk_manager', 'viewer')")
     List<TradeResponse> pending() {
-        return tradeService.findAll(null).stream()
-                .filter(trade -> trade.status() == Trade.TradeStatus.SUBMITTED)
-                .toList();
+        return tradeService.findAll(null, Trade.TradeStatus.SUBMITTED, 0, 200).items();
     }
 
     @PostMapping("/{id}/approve")

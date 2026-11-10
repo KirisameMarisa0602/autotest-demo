@@ -25,6 +25,13 @@ Do not “fix” them unless a change task explicitly asks to close the defect.
 ## SPEC-GAP-SAME-DAY-EXPIRY-TIMEZONE
 
 - **Module**: trade validation + pricing day count
-- **Symptom / ambiguity**: When `maturity` equals “today”, the implementation compares dates using the **JVM local timezone** (`ZoneId.systemDefault()`), while demo Clock / documented business instant is UTC (`2026-01-15T10:00:00Z`).
-- **Requirement stance**: UTC vs local is intentionally unresolved. Tests must not assert normative PV/Delta/accept-reject behavior for same-day maturity.
+- **Symptom / ambiguity**: When `maturity` equals “today”, the implementation floors the pricing day count to one day, and the two call sites disagree about what "today" means: pricing uses the injected business `Clock` (2026-01-15T10:00:00Z in `demo`), while creation validation compares against the JVM local date.
+- **Requirement stance**: neither the same-day day-count convention nor UTC-vs-local is approved. Tests must not assert normative PV/Delta/accept-reject behavior for same-day maturity.
 - **Oracle**: `docs/requirements/02-trading-and-pricing.md` §5.
+
+## DOC-DRIFT-LIST-AND-HISTORY
+
+- **Module**: published contract (`docs/openapi.yaml`, `docs/permissions.yaml`)
+- **Symptom**: The published OpenAPI still documents `GET /api/trades` as a bare array without `page`/`size`/`status`, and does not document `GET /api/trades/{id}/history` at all. `docs/permissions.yaml` does not list the history operation either.
+- **Why it is intentional**: a real project's published contract routinely lags the implementation. The requirements documents are authoritative; the OpenAPI is stale. External automation must detect the drift from source instead of trusting the contract.
+- **Required behavior**: list/history behavior is defined by `docs/requirements/02-trading-and-pricing.md` §6 and §7. Do not "fix" the OpenAPI unless a change task explicitly asks for contract refresh.
