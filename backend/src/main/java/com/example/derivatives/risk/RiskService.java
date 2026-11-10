@@ -85,11 +85,12 @@ public class RiskService {
             BigDecimal tradePv = value.presentValue();
             BigDecimal tradeDelta = value.delta();
 
-            // Intentional deterministic product bug for test-harness evaluation:
-            // SHORT European options are aggregated without their direction sign.
+            // INTENTIONAL PRODUCT BUG (KNOWN-BUG-RISK-SHORT-OPTION-DELTA):
+            // SHORT European option Delta is aggregated without applying the side sign.
+            // Pricing already returns signed Greeks; this undoes the Delta sign only.
+            // Present value remains correctly signed. SHORT forwards are unaffected.
             if (trade.getTradeType() == Trade.TradeType.EUROPEAN_OPTION
                     && trade.getSide() == Trade.Side.SHORT) {
-                tradePv = tradePv.negate();
                 tradeDelta = tradeDelta.negate();
             }
 
