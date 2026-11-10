@@ -61,7 +61,7 @@ public class PricingService {
             } else {
                 unitPv = strike * Math.exp(-rate * years) * normalCdf(-d2)
                         - spot * normalCdf(-d1);
-                unitDelta = normalCdf(d1) - 1.0;
+                unitDelta = 1.0 - normalCdf(d1);
             }
         }
 
