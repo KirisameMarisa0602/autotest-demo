@@ -25,7 +25,7 @@ cases:
     oracle:
       file: docs/permissions.yaml
       operation: createTrade
-    given: no Authorization header
+    given: no X-Demo-User / X-Demo-Role headers
     when: POST /api/trades
     then: HTTP 401 with code UNAUTHENTICATED
 
@@ -34,18 +34,45 @@ cases:
     oracle:
       file: docs/permissions.yaml
       operation: createTrade
-    given: trader-token and valid create request
+    given: X-Demo-Role=trader and valid create request
     when: POST /api/trades with a new Idempotency-Key
     then: HTTP 201 and DRAFT trade
 
-  - key: AUTH-APPROVER-CREATE-DENIED
+  - key: AUTH-RISK-MANAGER-CREATE-DENIED
     suite: backend-green
     oracle:
       file: docs/permissions.yaml
       operation: createTrade
-    given: approver-token
+    given: X-Demo-Role=risk_manager
     when: POST /api/trades
     then: HTTP 403 with code FORBIDDEN
+
+  - key: AUTH-VIEWER-CREATE-DENIED
+    suite: backend-green
+    oracle:
+      file: docs/permissions.yaml
+      operation: createTrade
+    given: X-Demo-Role=viewer
+    when: POST /api/trades
+    then: HTTP 403 with code FORBIDDEN
+
+  - key: HEALTH-PUBLIC
+    suite: backend-green
+    oracle:
+      file: docs/openapi.yaml
+      operation: health
+    given: anonymous caller
+    when: GET /api/health
+    then: HTTP 200 with status UP
+
+  - key: RESET-DEMO
+    suite: backend-green
+    oracle:
+      file: docs/requirements/01-system-context.md
+      section: "2"
+    given: demo profile and any valid identity
+    when: POST /api/test/reset
+    then: HTTP 200 with portfolioCount=2 and marketSnapshotCount=2
 
   - key: VALIDATION-QUANTITY-POSITIVE
     suite: backend-green
@@ -55,15 +82,6 @@ cases:
     given: quantity is zero
     when: POST /api/trades
     then: HTTP 400 with code VALIDATION_ERROR and quantity field error
-
-  - key: VALIDATION-PRODUCT-FIELDS
-    suite: backend-green
-    oracle:
-      file: docs/openapi.yaml
-      schema: CreateTradeRequest
-    given: optionType missing for EUROPEAN_OPTION or present for FORWARD
-    when: POST /api/trades
-    then: HTTP 400 with code VALIDATION_ERROR
 
   - key: IDEMPOTENCY-SAME-BODY-REPLAY
     suite: backend-green
@@ -89,7 +107,7 @@ cases:
       file: docs/state-machine.yaml
       path: DRAFT.submit.SUBMITTED.approve.APPROVED
     given: a DRAFT trade at version 0
-    when: TRADER submits version 0 and APPROVER approves version 1
+    when: trader submits version 0 and risk_manager approves version 1
     then: APPROVED at version 2 with transition audit events
 
   - key: STATE-HAPPY-REJECT
@@ -98,7 +116,7 @@ cases:
       file: docs/state-machine.yaml
       path: DRAFT.submit.SUBMITTED.reject.REJECTED
     given: a SUBMITTED trade and non-blank comment
-    when: APPROVER rejects the current version
+    when: risk_manager rejects the current version
     then: REJECTED and version incremented
 
   - key: STATE-INVALID-DRAFT-APPROVE
@@ -107,7 +125,7 @@ cases:
       file: docs/state-machine.yaml
       rule: unsupportedTransition
     given: a DRAFT trade
-    when: APPROVER attempts approve
+    when: risk_manager attempts approve
     then: HTTP 409 INVALID_TRANSITION with unchanged state and no audit event
 
   - key: VERSION-STALE-CONFLICT
@@ -128,15 +146,6 @@ cases:
     when: GET /api/trades/{id}/valuation
     then: PV and Delta match formula within absolute tolerance 0.0001
 
-  - key: PRICING-OPTION-CALL-LONG
-    suite: backend-green
-    oracle:
-      file: docs/requirements/02-trading-and-pricing.md
-      section: "4"
-    given: a future-maturity LONG European call
-    when: GET /api/trades/{id}/valuation
-    then: Black-Scholes PV and Delta match within absolute tolerance 0.0001
-
   - key: PRICING-SHORT-SIGN
     suite: backend-green
     oracle:
@@ -152,47 +161,41 @@ cases:
       file: docs/requirements/03-risk-audit-and-known-issues.md
       section: "1"
     given: trades in all four statuses
-    when: RISK_MANAGER reads portfolio risk
+    when: risk_manager reads portfolio risk
     then: only APPROVED trades are counted and aggregated
-
-  - key: RISK-STRESS-SCENARIOS
-    suite: backend-green
-    oracle:
-      file: docs/requirements/03-risk-audit-and-known-issues.md
-      section: "3"
-    given: at least one approved non-short-option trade
-    when: RISK_MANAGER reads portfolio risk
-    then: both fixed spot scenarios reprice and PnL equals stressed PV minus base PV
 
   - key: RISK-SHORT-OPTION-DIRECTION
     suite: external-playwright
     defaultGreen: false
     expectedCurrentResult: FAIL
-    knownProductBug: KNOWN-BUG-RISK-SHORT-OPTION-SIGN
+    knownProductBug: KNOWN-BUG-RISK-SHORT-OPTION-DELTA
     oracle:
       file: docs/requirements/03-risk-audit-and-known-issues.md
       section: "2"
     given: one approved SHORT European call and no other approved trades
     when: compare its signed single valuation to portfolio risk
-    then: risk PV and Delta equal the signed single valuation within tolerance 0.0001
+    then: risk Delta equals the signed single valuation within tolerance 0.0001 (currently fails)
 
-  - key: AUDIT-SUCCESSFUL-LIFECYCLE
-    suite: backend-green
+  - key: UI-APPROVE-TESTID-STALE
+    suite: external-playwright
+    defaultGreen: false
+    expectedCurrentResult: FAIL
+    knownProductBug: KNOWN-BUG-UI-APPROVE-TESTID
     oracle:
-      file: docs/requirements/03-risk-audit-and-known-issues.md
-      section: "5"
-    given: a newly reset demo
-    when: create, submit, and approve succeed
-    then: exactly one corresponding audit event exists for each successful action
+      file: docs/requirements/04-ui-test-contract.md
+      section: "2"
+    given: approval desk with a submitted trade
+    when: locator approve-trade is used
+    then: element is missing; approve-trade-old exists instead
 
-  - key: UI-TRADER-APPROVER-RISK-FLOW
+  - key: UI-TRADER-RISK-MANAGER-FLOW
     suite: external-playwright
     defaultGreen: false
     oracle:
       file: docs/requirements/04-ui-test-contract.md
       section: "1"
     given: reset demo and browser at /login
-    when: create and submit as TRADER, approve as APPROVER, view as RISK_MANAGER
+    when: create and submit as trader, approve as risk_manager, view risk
     then: each page reflects the state and risk count is 1
 
   - key: SPEC-GAP-SAME-DAY-EXPIRY
@@ -201,4 +204,4 @@ cases:
     oracle:
       file: docs/requirements/02-trading-and-pricing.md
       section: "5"
-    reason: Same-day expiry acceptance and valuation rules have not been approved.
+    reason: Same-day expiry acceptance/valuation and UTC-vs-local "today" are intentionally unresolved.

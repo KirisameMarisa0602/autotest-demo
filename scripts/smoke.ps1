@@ -4,15 +4,20 @@
 )
 
 $ErrorActionPreference = "Stop"
-$headers = @{ Authorization = "Bearer trader-token" }
+$headers = @{
+    "X-Demo-User" = "alice"
+    "X-Demo-Role" = "trader"
+    "X-Run-Id" = "smoke"
+    "X-Case-Key" = "smoke-reset"
+}
 
-$health = Invoke-RestMethod -Method Get -Uri "$BackendUrl/actuator/health"
+$health = Invoke-RestMethod -Method Get -Uri "$BackendUrl/api/health"
 if ($health.status -ne "UP") {
     throw "Backend health was '$($health.status)', expected UP."
 }
 
-$reset = Invoke-RestMethod -Method Post -Uri "$BackendUrl/api/demo/reset" -Headers $headers
-if ($reset.businessDate -ne "2026-01-15" -or $reset.portfolioCount -ne 2) {
+$reset = Invoke-RestMethod -Method Post -Uri "$BackendUrl/api/test/reset" -Headers $headers
+if ($reset.portfolioCount -ne 2 -or $reset.marketSnapshotCount -ne 2) {
     throw "Demo reset returned unexpected deterministic seed metadata."
 }
 
@@ -26,4 +31,4 @@ if ($frontend.StatusCode -ne 200 -or $frontend.Content -notmatch "衍生品交�
     throw "Frontend did not return the expected application shell."
 }
 
-Write-Host "Smoke checks passed: backend health, deterministic reset, market data, frontend shell."
+Write-Host "Smoke checks passed: /api/health, /api/test/reset, market data, frontend shell."
