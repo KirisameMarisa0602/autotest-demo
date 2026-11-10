@@ -1,0 +1,716 @@
+openapi: 3.1.0
+info:
+  title: Derivatives Trading Demo API
+  version: 0.1.0
+  description: |
+    Contract for the deliberately non-production derivatives demo.
+    Business rules and oracle tolerances are defined in docs/requirements.
+servers:
+  - url: http://localhost:8080
+security:
+  - bearerAuth: []
+
+paths:
+  /api/demo/reset:
+    post:
+      operationId: resetDemo
+      summary: Reset and seed deterministic demo data
+      x-roles: [TRADER, RISK_MANAGER, APPROVER]
+      responses:
+        "200":
+          description: Database reset and reference data seeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResetResponse"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+
+  /api/market-data:
+    get:
+      operationId: listMarketData
+      summary: List fixed market snapshots
+      x-roles: [TRADER, RISK_MANAGER, APPROVER]
+      responses:
+        "200":
+          description: Market snapshots
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MarketSnapshot"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+
+  /api/portfolios:
+    get:
+      operationId: listPortfolios
+      summary: List portfolios
+      x-roles: [TRADER, RISK_MANAGER, APPROVER]
+      responses:
+        "200":
+          description: Portfolios
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Portfolio"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+
+  /api/trades:
+    post:
+      operationId: createTrade
+      summary: Idempotently create a draft trade
+      x-roles: [TRADER]
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: Unique create key; same key and same semantic body replays the resource.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 100
+            pattern: ".*\\S.*"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTradeRequest"
+      responses:
+        "201":
+          description: New DRAFT created
+          headers:
+            Location:
+              schema:
+                type: string
+              description: /api/trades/{id}
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Trade"
+        "200":
+          description: Idempotent replay; returns the existing trade's current representation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Trade"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Idempotency key was used with a different semantic body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+              examples:
+                conflict:
+                  value:
+                    timestamp: "2026-01-15T10:00:00Z"
+                    status: 409
+                    code: IDEMPOTENCY_CONFLICT
+                    message: The Idempotency-Key was already used with a different request
+                    path: /api/trades
+                    fieldErrors: []
+    get:
+      operationId: listTrades
+      summary: List trades, optionally by portfolio
+      x-roles: [TRADER, RISK_MANAGER, APPROVER]
+      parameters:
+        - name: portfolioCode
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 40
+          example: ALPHA
+      responses:
+        "200":
+          description: Trades
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Trade"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/trades/{id}:
+    parameters:
+      - $ref: "#/components/parameters/TradeId"
+    get:
+      operationId: getTrade
+      summary: Get a trade
+      x-roles: [TRADER, RISK_MANAGER, APPROVER]
+      responses:
+        "200":
+          description: Trade
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Trade"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/trades/{id}/valuation:
+    parameters:
+      - $ref: "#/components/parameters/TradeId"
+    get:
+      operationId: valueTrade
+      summary: Price one trade and calculate signed Delta
+      x-roles: [TRADER, RISK_MANAGER, APPROVER]
+      responses:
+        "200":
+          description: Signed valuation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Valuation"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/trades/{id}/submit:
+    parameters:
+      - $ref: "#/components/parameters/TradeId"
+    post:
+      operationId: submitTrade
+      summary: Move DRAFT to SUBMITTED
+      x-roles: [TRADER]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransitionRequest"
+      responses:
+        "200":
+          description: Submitted trade with version incremented
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Trade"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/TransitionConflict"
+
+  /api/trades/{id}/approve:
+    parameters:
+      - $ref: "#/components/parameters/TradeId"
+    post:
+      operationId: approveTrade
+      summary: Move SUBMITTED to APPROVED
+      x-roles: [APPROVER]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DecisionRequest"
+      responses:
+        "200":
+          description: Approved trade with version incremented
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Trade"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/TransitionConflict"
+
+  /api/trades/{id}/reject:
+    parameters:
+      - $ref: "#/components/parameters/TradeId"
+    post:
+      operationId: rejectTrade
+      summary: Move SUBMITTED to REJECTED
+      description: comment is required and must be non-blank for this operation.
+      x-roles: [APPROVER]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: "#/components/schemas/DecisionRequest"
+                - type: object
+                  required: [comment]
+                  properties:
+                    comment:
+                      type: string
+                      minLength: 1
+                      maxLength: 500
+                      pattern: ".*\\S.*"
+      responses:
+        "200":
+          description: Rejected trade with version incremented
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Trade"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/TransitionConflict"
+
+  /api/risk/portfolios/{portfolioCode}:
+    parameters:
+      - name: portfolioCode
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 40
+        example: ALPHA
+    get:
+      operationId: getPortfolioRisk
+      summary: Aggregate approved trades and fixed spot scenarios
+      x-roles: [RISK_MANAGER]
+      responses:
+        "200":
+          description: Portfolio risk
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RiskReport"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/audit-events:
+    get:
+      operationId: listAuditEvents
+      summary: List audit events newest first; equal timestamps have unspecified relative order
+      x-roles: [TRADER, RISK_MANAGER, APPROVER]
+      responses:
+        "200":
+          description: Audit timeline
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AuditEvent"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: fixed-demo-token
+
+  parameters:
+    TradeId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    ValidationError:
+      description: Request or business field validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+    Unauthenticated:
+      description: Missing or unknown fixed bearer token
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+    Forbidden:
+      description: Authenticated role is not permitted
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+    NotFound:
+      description: Referenced resource does not exist
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+    TransitionConflict:
+      description: VERSION_CONFLICT or INVALID_TRANSITION
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+
+  schemas:
+    ResetResponse:
+      type: object
+      required: [businessDate, portfolioCount, marketSnapshotCount]
+      properties:
+        businessDate:
+          type: string
+          format: date
+          const: "2026-01-15"
+        portfolioCount:
+          type: integer
+          const: 2
+        marketSnapshotCount:
+          type: integer
+          const: 2
+
+    MarketSnapshot:
+      type: object
+      required: [underlying, spot, volatility, riskFreeRate, asOf]
+      properties:
+        underlying:
+          type: string
+          examples: [AAPL]
+        spot:
+          type: number
+          exclusiveMinimum: 0
+        volatility:
+          type: number
+          exclusiveMinimum: 0
+        riskFreeRate:
+          type: number
+        asOf:
+          type: string
+          format: date-time
+
+    Portfolio:
+      type: object
+      required: [code, name]
+      properties:
+        code:
+          type: string
+          maxLength: 40
+        name:
+          type: string
+
+    CreateTradeRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - portfolioCode
+        - tradeType
+        - side
+        - underlying
+        - quantity
+        - strike
+        - maturity
+      properties:
+        portfolioCode:
+          type: string
+          minLength: 1
+          maxLength: 40
+          examples: [ALPHA]
+        tradeType:
+          $ref: "#/components/schemas/TradeType"
+        side:
+          $ref: "#/components/schemas/Side"
+        underlying:
+          type: string
+          pattern: "^[A-Z0-9.-]+$"
+          maxLength: 40
+          examples: [AAPL]
+        quantity:
+          type: number
+          exclusiveMinimum: 0
+          maximum: 999999999999.999999
+          multipleOf: 0.000001
+          examples: [10]
+        strike:
+          type: number
+          exclusiveMinimum: 0
+          maximum: 999999999999.999999
+          multipleOf: 0.000001
+          examples: [100]
+        maturity:
+          type: string
+          format: date
+          description: Dates before 2026-01-15 are invalid. Same-day acceptance and valuation are intentionally unspecified.
+          examples: ["2027-12-31"]
+        optionType:
+          oneOf:
+            - $ref: "#/components/schemas/OptionType"
+            - type: "null"
+      allOf:
+        - if:
+            properties:
+              tradeType:
+                const: EUROPEAN_OPTION
+          then:
+            required: [optionType]
+            properties:
+              optionType:
+                $ref: "#/components/schemas/OptionType"
+        - if:
+            properties:
+              tradeType:
+                const: FORWARD
+          then:
+            properties:
+              optionType:
+                type: "null"
+
+    Trade:
+      type: object
+      required:
+        - id
+        - portfolioCode
+        - tradeType
+        - side
+        - underlying
+        - quantity
+        - strike
+        - maturity
+        - status
+        - version
+        - createdAt
+        - updatedAt
+        - createdBy
+      properties:
+        id:
+          type: string
+          format: uuid
+        portfolioCode:
+          type: string
+        tradeType:
+          $ref: "#/components/schemas/TradeType"
+        side:
+          $ref: "#/components/schemas/Side"
+        underlying:
+          type: string
+        quantity:
+          type: number
+        strike:
+          type: number
+        maturity:
+          type: string
+          format: date
+        optionType:
+          oneOf:
+            - $ref: "#/components/schemas/OptionType"
+            - type: "null"
+        status:
+          type: string
+          enum: [DRAFT, SUBMITTED, APPROVED, REJECTED]
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        createdBy:
+          type: string
+          enum: [TRADER]
+        decisionBy:
+          oneOf:
+            - type: string
+              enum: [APPROVER]
+            - type: "null"
+        decisionComment:
+          oneOf:
+            - type: string
+              maxLength: 500
+            - type: "null"
+
+    TransitionRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedVersion]
+      properties:
+        expectedVersion:
+          type: integer
+          format: int64
+          minimum: 0
+
+    DecisionRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedVersion]
+      properties:
+        expectedVersion:
+          type: integer
+          format: int64
+          minimum: 0
+        comment:
+          type: string
+          maxLength: 500
+
+    Valuation:
+      type: object
+      required: [tradeId, presentValue, delta, currency, marketDataAsOf]
+      properties:
+        tradeId:
+          type: string
+          format: uuid
+        presentValue:
+          type: number
+          multipleOf: 0.000001
+        delta:
+          type: number
+          multipleOf: 0.000001
+        currency:
+          type: string
+          const: USD
+        marketDataAsOf:
+          type: string
+          format: date-time
+
+    RiskReport:
+      type: object
+      required:
+        - portfolioCode
+        - approvedTradeCount
+        - presentValue
+        - delta
+        - currency
+        - scenarios
+      properties:
+        portfolioCode:
+          type: string
+        approvedTradeCount:
+          type: integer
+          minimum: 0
+        presentValue:
+          type: number
+          multipleOf: 0.000001
+        delta:
+          type: number
+          multipleOf: 0.000001
+        currency:
+          type: string
+          const: USD
+        scenarios:
+          type: array
+          minItems: 2
+          maxItems: 2
+          items:
+            $ref: "#/components/schemas/RiskScenario"
+
+    RiskScenario:
+      type: object
+      required: [key, spotShockPct, stressedPresentValue, pnl]
+      properties:
+        key:
+          type: string
+          enum: [SPOT_DOWN_10, SPOT_UP_10]
+        spotShockPct:
+          type: number
+          enum: [-0.10, 0.10]
+        stressedPresentValue:
+          type: number
+          multipleOf: 0.000001
+        pnl:
+          type: number
+          multipleOf: 0.000001
+
+    AuditEvent:
+      type: object
+      required: [id, eventType, aggregateType, aggregateId, actor, occurredAt, details]
+      properties:
+        id:
+          type: string
+          format: uuid
+        eventType:
+          type: string
+          enum:
+            - DEMO_RESET
+            - TRADE_CREATED
+            - TRADE_SUBMITTED
+            - TRADE_APPROVED
+            - TRADE_REJECTED
+        aggregateType:
+          type: string
+        aggregateId:
+          type: string
+        actor:
+          type: string
+          enum: [SYSTEM, TRADER, APPROVER, RISK_MANAGER]
+        occurredAt:
+          type: string
+          format: date-time
+        details:
+          type: string
+
+    ApiError:
+      type: object
+      required: [timestamp, status, code, message, path, fieldErrors]
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        status:
+          type: integer
+        code:
+          type: string
+        message:
+          type: string
+        path:
+          type: string
+        fieldErrors:
+          type: array
+          items:
+            type: object
+            required: [field, message]
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+
+    TradeType:
+      type: string
+      enum: [EUROPEAN_OPTION, FORWARD]
+
+    Side:
+      type: string
+      enum: [LONG, SHORT]
+
+    OptionType:
+      type: string
+      enum: [CALL, PUT]

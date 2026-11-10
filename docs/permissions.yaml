@@ -1,0 +1,70 @@
+schemaVersion: "1.0"
+authentication:
+  scheme: Bearer
+  tokens:
+    trader-token: TRADER
+    risk-token: RISK_MANAGER
+    approver-token: APPROVER
+  missingOrUnknown:
+    httpStatus: 401
+    errorCode: UNAUTHENTICATED
+  authenticatedButDenied:
+    httpStatus: 403
+    errorCode: FORBIDDEN
+
+permissions:
+  - operation: health
+    method: GET
+    path: /actuator/health
+    roles: [ANONYMOUS, TRADER, RISK_MANAGER, APPROVER]
+  - operation: resetDemo
+    method: POST
+    path: /api/demo/reset
+    roles: [TRADER, RISK_MANAGER, APPROVER]
+    profile: demo
+  - operation: readMarketData
+    method: GET
+    path: /api/market-data
+    roles: [TRADER, RISK_MANAGER, APPROVER]
+  - operation: readPortfolios
+    method: GET
+    path: /api/portfolios
+    roles: [TRADER, RISK_MANAGER, APPROVER]
+  - operation: createTrade
+    method: POST
+    path: /api/trades
+    roles: [TRADER]
+  - operation: listTrades
+    method: GET
+    path: /api/trades
+    roles: [TRADER, RISK_MANAGER, APPROVER]
+  - operation: readTrade
+    method: GET
+    path: /api/trades/{id}
+    roles: [TRADER, RISK_MANAGER, APPROVER]
+  - operation: valueTrade
+    method: GET
+    path: /api/trades/{id}/valuation
+    roles: [TRADER, RISK_MANAGER, APPROVER]
+  - operation: submitTrade
+    method: POST
+    path: /api/trades/{id}/submit
+    roles: [TRADER]
+  - operation: approveTrade
+    method: POST
+    path: /api/trades/{id}/approve
+    roles: [APPROVER]
+  - operation: rejectTrade
+    method: POST
+    path: /api/trades/{id}/reject
+    roles: [APPROVER]
+  - operation: readRisk
+    method: GET
+    path: /api/risk/portfolios/{portfolioCode}
+    roles: [RISK_MANAGER]
+  - operation: readAudit
+    method: GET
+    path: /api/audit-events
+    roles: [TRADER, RISK_MANAGER, APPROVER]
+
+defaultPolicy: DENY

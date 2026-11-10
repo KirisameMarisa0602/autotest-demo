@@ -1,0 +1,73 @@
+schemaVersion: "1.0"
+aggregate: Trade
+versionField: version
+initial:
+  state: DRAFT
+  version: 0
+
+states:
+  DRAFT:
+    terminal: false
+    transitions:
+      - action: submit
+        method: POST
+        path: /api/trades/{id}/submit
+        actorRole: TRADER
+        target: SUBMITTED
+        request:
+          required:
+            expectedVersion: current version
+        effects:
+          versionIncrement: 1
+          auditEvent: TRADE_SUBMITTED
+  SUBMITTED:
+    terminal: false
+    transitions:
+      - action: approve
+        method: POST
+        path: /api/trades/{id}/approve
+        actorRole: APPROVER
+        target: APPROVED
+        request:
+          required:
+            expectedVersion: current version
+          optional:
+            comment: string, maxLength 500
+        effects:
+          versionIncrement: 1
+          auditEvent: TRADE_APPROVED
+      - action: reject
+        method: POST
+        path: /api/trades/{id}/reject
+        actorRole: APPROVER
+        target: REJECTED
+        request:
+          required:
+            expectedVersion: current version
+            comment: non-blank string, maxLength 500
+        effects:
+          versionIncrement: 1
+          auditEvent: TRADE_REJECTED
+  APPROVED:
+    terminal: true
+    transitions: []
+  REJECTED:
+    terminal: true
+    transitions: []
+
+failureRules:
+  staleVersion:
+    httpStatus: 409
+    errorCode: VERSION_CONFLICT
+    stateChanged: false
+    auditCreated: false
+  unsupportedTransition:
+    httpStatus: 409
+    errorCode: INVALID_TRANSITION
+    stateChanged: false
+    auditCreated: false
+  wrongRole:
+    httpStatus: 403
+    errorCode: FORBIDDEN
+    stateChanged: false
+    auditCreated: false

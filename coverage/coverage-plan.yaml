@@ -1,0 +1,204 @@
+schemaVersion: "1.0"
+project: derivatives-trading-demo
+sourceCommit: PENDING_COMMIT
+sourceCommitResolution:
+  command: powershell -File scripts/stamp-commit.ps1
+  behavior: Prints the current HEAD SHA without modifying tracked files; use this value as sourceCommit in generated test evidence.
+
+suites:
+  backend-green:
+    default: true
+    runner: Maven/JUnit
+  frontend-green:
+    default: true
+    runner: Vitest
+  external-playwright:
+    default: false
+    runner: External Playwright framework
+  unresolved-spec:
+    default: false
+    runner: none
+
+cases:
+  - key: AUTH-UNAUTHENTICATED
+    suite: backend-green
+    oracle:
+      file: docs/permissions.yaml
+      operation: createTrade
+    given: no Authorization header
+    when: POST /api/trades
+    then: HTTP 401 with code UNAUTHENTICATED
+
+  - key: AUTH-TRADER-CREATE
+    suite: backend-green
+    oracle:
+      file: docs/permissions.yaml
+      operation: createTrade
+    given: trader-token and valid create request
+    when: POST /api/trades with a new Idempotency-Key
+    then: HTTP 201 and DRAFT trade
+
+  - key: AUTH-APPROVER-CREATE-DENIED
+    suite: backend-green
+    oracle:
+      file: docs/permissions.yaml
+      operation: createTrade
+    given: approver-token
+    when: POST /api/trades
+    then: HTTP 403 with code FORBIDDEN
+
+  - key: VALIDATION-QUANTITY-POSITIVE
+    suite: backend-green
+    oracle:
+      file: docs/requirements/02-trading-and-pricing.md
+      section: "1"
+    given: quantity is zero
+    when: POST /api/trades
+    then: HTTP 400 with code VALIDATION_ERROR and quantity field error
+
+  - key: VALIDATION-PRODUCT-FIELDS
+    suite: backend-green
+    oracle:
+      file: docs/openapi.yaml
+      schema: CreateTradeRequest
+    given: optionType missing for EUROPEAN_OPTION or present for FORWARD
+    when: POST /api/trades
+    then: HTTP 400 with code VALIDATION_ERROR
+
+  - key: IDEMPOTENCY-SAME-BODY-REPLAY
+    suite: backend-green
+    oracle:
+      file: docs/requirements/02-trading-and-pricing.md
+      section: "2"
+    given: an existing trade and the same semantic create fields
+    when: POST /api/trades with the same Idempotency-Key
+    then: HTTP 200, same id, no duplicate trade or audit event
+
+  - key: IDEMPOTENCY-DIFFERENT-BODY-CONFLICT
+    suite: backend-green
+    oracle:
+      file: docs/requirements/02-trading-and-pricing.md
+      section: "2"
+    given: an Idempotency-Key used by an existing trade
+    when: POST /api/trades with any different create field
+    then: HTTP 409 with code IDEMPOTENCY_CONFLICT
+
+  - key: STATE-HAPPY-APPROVE
+    suite: backend-green
+    oracle:
+      file: docs/state-machine.yaml
+      path: DRAFT.submit.SUBMITTED.approve.APPROVED
+    given: a DRAFT trade at version 0
+    when: TRADER submits version 0 and APPROVER approves version 1
+    then: APPROVED at version 2 with transition audit events
+
+  - key: STATE-HAPPY-REJECT
+    suite: backend-green
+    oracle:
+      file: docs/state-machine.yaml
+      path: DRAFT.submit.SUBMITTED.reject.REJECTED
+    given: a SUBMITTED trade and non-blank comment
+    when: APPROVER rejects the current version
+    then: REJECTED and version incremented
+
+  - key: STATE-INVALID-DRAFT-APPROVE
+    suite: backend-green
+    oracle:
+      file: docs/state-machine.yaml
+      rule: unsupportedTransition
+    given: a DRAFT trade
+    when: APPROVER attempts approve
+    then: HTTP 409 INVALID_TRANSITION with unchanged state and no audit event
+
+  - key: VERSION-STALE-CONFLICT
+    suite: backend-green
+    oracle:
+      file: docs/state-machine.yaml
+      rule: staleVersion
+    given: current trade version differs from expectedVersion
+    when: an otherwise valid transition is requested
+    then: HTTP 409 VERSION_CONFLICT with unchanged state and no audit event
+
+  - key: PRICING-FORWARD-LONG
+    suite: backend-green
+    oracle:
+      file: docs/requirements/02-trading-and-pricing.md
+      section: "4"
+    given: a future-maturity LONG forward
+    when: GET /api/trades/{id}/valuation
+    then: PV and Delta match formula within absolute tolerance 0.0001
+
+  - key: PRICING-OPTION-CALL-LONG
+    suite: backend-green
+    oracle:
+      file: docs/requirements/02-trading-and-pricing.md
+      section: "4"
+    given: a future-maturity LONG European call
+    when: GET /api/trades/{id}/valuation
+    then: Black-Scholes PV and Delta match within absolute tolerance 0.0001
+
+  - key: PRICING-SHORT-SIGN
+    suite: backend-green
+    oracle:
+      file: docs/requirements/02-trading-and-pricing.md
+      section: "4"
+    given: otherwise identical LONG and SHORT trades
+    when: their single-trade valuations are read
+    then: SHORT PV and Delta are the exact sign inverse within tolerance 0.0001
+
+  - key: RISK-APPROVED-ONLY
+    suite: backend-green
+    oracle:
+      file: docs/requirements/03-risk-audit-and-known-issues.md
+      section: "1"
+    given: trades in all four statuses
+    when: RISK_MANAGER reads portfolio risk
+    then: only APPROVED trades are counted and aggregated
+
+  - key: RISK-STRESS-SCENARIOS
+    suite: backend-green
+    oracle:
+      file: docs/requirements/03-risk-audit-and-known-issues.md
+      section: "3"
+    given: at least one approved non-short-option trade
+    when: RISK_MANAGER reads portfolio risk
+    then: both fixed spot scenarios reprice and PnL equals stressed PV minus base PV
+
+  - key: RISK-SHORT-OPTION-DIRECTION
+    suite: external-playwright
+    defaultGreen: false
+    expectedCurrentResult: FAIL
+    knownProductBug: KNOWN-BUG-RISK-SHORT-OPTION-SIGN
+    oracle:
+      file: docs/requirements/03-risk-audit-and-known-issues.md
+      section: "2"
+    given: one approved SHORT European call and no other approved trades
+    when: compare its signed single valuation to portfolio risk
+    then: risk PV and Delta equal the signed single valuation within tolerance 0.0001
+
+  - key: AUDIT-SUCCESSFUL-LIFECYCLE
+    suite: backend-green
+    oracle:
+      file: docs/requirements/03-risk-audit-and-known-issues.md
+      section: "5"
+    given: a newly reset demo
+    when: create, submit, and approve succeed
+    then: exactly one corresponding audit event exists for each successful action
+
+  - key: UI-TRADER-APPROVER-RISK-FLOW
+    suite: external-playwright
+    defaultGreen: false
+    oracle:
+      file: docs/requirements/04-ui-test-contract.md
+      section: "1"
+    given: reset demo and browser at /login
+    when: create and submit as TRADER, approve as APPROVER, view as RISK_MANAGER
+    then: each page reflects the state and risk count is 1
+
+  - key: SPEC-GAP-SAME-DAY-EXPIRY
+    suite: unresolved-spec
+    executable: false
+    oracle:
+      file: docs/requirements/02-trading-and-pricing.md
+      section: "5"
+    reason: Same-day expiry acceptance and valuation rules have not been approved.

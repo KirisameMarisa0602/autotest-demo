@@ -1,0 +1,152 @@
+:root {
+  font-family: Inter, "Segoe UI", sans-serif;
+  color: #172033;
+  background: #f4f6fa;
+  line-height: 1.5;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 2rem;
+  color: white;
+  background: #172d54;
+}
+
+.app-header h1,
+.app-header p {
+  margin: 0;
+}
+
+.identity,
+nav,
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+nav {
+  padding: 0.75rem 2rem;
+  background: white;
+  border-bottom: 1px solid #d8deea;
+}
+
+nav a {
+  color: #245ca6;
+}
+
+nav a.router-link-active {
+  font-weight: 700;
+}
+
+main {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+.panel {
+  margin-bottom: 1rem;
+  padding: 1rem;
+  background: white;
+  border: 1px solid #d8deea;
+  border-radius: 6px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+}
+
+label {
+  display: grid;
+  gap: 0.3rem;
+  font-weight: 600;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid #aeb9ca;
+  border-radius: 4px;
+}
+
+button {
+  padding: 0.5rem 0.8rem;
+  border: 1px solid #245ca6;
+  border-radius: 4px;
+  color: white;
+  background: #245ca6;
+}
+
+button.secondary {
+  color: #245ca6;
+  background: white;
+}
+
+button.danger {
+  border-color: #a32929;
+  background: #a32929;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  padding: 0.55rem;
+  text-align: left;
+  border-bottom: 1px solid #e2e7ef;
+}
+
+.error {
+  padding: 0.65rem;
+  color: #8b1b1b;
+  background: #fff0f0;
+  border: 1px solid #e5a9a9;
+}
+
+.success {
+  color: #176229;
+}
+
+@media (max-width: 680px) {
+  .app-header,
+  nav {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 1rem;
+  }
+}
