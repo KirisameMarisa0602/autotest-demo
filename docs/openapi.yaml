@@ -1,21 +1,46 @@
 openapi: 3.1.0
 info:
   title: Derivatives Trading Demo API
-  version: 0.1.0
+  version: 0.2.0
   description: |
     Contract for the deliberately non-production derivatives demo.
     Business rules and oracle tolerances are defined in docs/requirements.
+    Known intentional defects are listed in docs/KNOWN-DEFECTS.md.
 servers:
   - url: http://localhost:8080
 security:
-  - bearerAuth: []
+  - demoHeaders: []
 
 paths:
-  /api/demo/reset:
+  /api/health:
+    get:
+      operationId: health
+      summary: Application health probe
+      security: []
+      responses:
+        "200":
+          description: Service is up
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, service, timestamp]
+                properties:
+                  status:
+                    type: string
+                    const: UP
+                  service:
+                    type: string
+                  timestamp:
+                    type: string
+                    format: date-time
+
+  /api/test/reset:
     post:
       operationId: resetDemo
       summary: Reset and seed deterministic demo data
-      x-roles: [TRADER, RISK_MANAGER, APPROVER]
+      description: Available only when Spring profile `demo` is active.
+      x-roles: [trader, risk_manager, viewer]
       responses:
         "200":
           description: Database reset and reference data seeded
@@ -30,7 +55,24 @@ paths:
     get:
       operationId: listMarketData
       summary: List fixed market snapshots
-      x-roles: [TRADER, RISK_MANAGER, APPROVER]
+      x-roles: [trader, risk_manager, viewer]
+      responses:
+        "200":
+          description: Market snapshots
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MarketSnapshot"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+
+  /api/market:
+    get:
+      operationId: listMarketAlias
+      summary: Alias of /api/market-data
+      x-roles: [trader, risk_manager, viewer]
       responses:
         "200":
           description: Market snapshots
@@ -47,7 +89,7 @@ paths:
     get:
       operationId: listPortfolios
       summary: List portfolios
-      x-roles: [TRADER, RISK_MANAGER, APPROVER]
+      x-roles: [trader, risk_manager, viewer]
       responses:
         "200":
           description: Portfolios
@@ -64,12 +106,11 @@ paths:
     post:
       operationId: createTrade
       summary: Idempotently create a draft trade
-      x-roles: [TRADER]
+      x-roles: [trader]
       parameters:
         - name: Idempotency-Key
           in: header
           required: true
-          description: Unique create key; same key and same semantic body replays the resource.
           schema:
             type: string
             minLength: 1
@@ -94,7 +135,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Trade"
         "200":
-          description: Idempotent replay; returns the existing trade's current representation
+          description: Idempotent replay
           content:
             application/json:
               schema:
@@ -108,24 +149,15 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
-          description: Idempotency key was used with a different semantic body
+          description: Idempotency key reused with a different body
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
-              examples:
-                conflict:
-                  value:
-                    timestamp: "2026-01-15T10:00:00Z"
-                    status: 409
-                    code: IDEMPOTENCY_CONFLICT
-                    message: The Idempotency-Key was already used with a different request
-                    path: /api/trades
-                    fieldErrors: []
     get:
       operationId: listTrades
       summary: List trades, optionally by portfolio
-      x-roles: [TRADER, RISK_MANAGER, APPROVER]
+      x-roles: [trader, risk_manager, viewer]
       parameters:
         - name: portfolioCode
           in: query
@@ -154,7 +186,7 @@ paths:
     get:
       operationId: getTrade
       summary: Get a trade
-      x-roles: [TRADER, RISK_MANAGER, APPROVER]
+      x-roles: [trader, risk_manager, viewer]
       responses:
         "200":
           description: Trade
@@ -173,7 +205,7 @@ paths:
     get:
       operationId: valueTrade
       summary: Price one trade and calculate signed Delta
-      x-roles: [TRADER, RISK_MANAGER, APPROVER]
+      x-roles: [trader, risk_manager, viewer]
       responses:
         "200":
           description: Signed valuation
@@ -192,7 +224,7 @@ paths:
     post:
       operationId: submitTrade
       summary: Move DRAFT to SUBMITTED
-      x-roles: [TRADER]
+      x-roles: [trader]
       requestBody:
         required: true
         content:
@@ -223,7 +255,7 @@ paths:
     post:
       operationId: approveTrade
       summary: Move SUBMITTED to APPROVED
-      x-roles: [APPROVER]
+      x-roles: [risk_manager]
       requestBody:
         required: true
         content:
@@ -254,8 +286,7 @@ paths:
     post:
       operationId: rejectTrade
       summary: Move SUBMITTED to REJECTED
-      description: comment is required and must be non-blank for this operation.
-      x-roles: [APPROVER]
+      x-roles: [risk_manager]
       requestBody:
         required: true
         content:
@@ -265,12 +296,6 @@ paths:
                 - $ref: "#/components/schemas/DecisionRequest"
                 - type: object
                   required: [comment]
-                  properties:
-                    comment:
-                      type: string
-                      minLength: 1
-                      maxLength: 500
-                      pattern: ".*\\S.*"
       responses:
         "200":
           description: Rejected trade with version incremented
@@ -289,6 +314,74 @@ paths:
         "409":
           $ref: "#/components/responses/TransitionConflict"
 
+  /api/approvals:
+    get:
+      operationId: listApprovals
+      summary: List SUBMITTED trades awaiting decision
+      x-roles: [risk_manager, viewer]
+      responses:
+        "200":
+          description: Pending approvals
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Trade"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/approvals/{id}/approve:
+    parameters:
+      - $ref: "#/components/parameters/TradeId"
+    post:
+      operationId: approveViaApprovals
+      summary: Approve via approvals module
+      x-roles: [risk_manager]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DecisionRequest"
+      responses:
+        "200":
+          description: Approved trade
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Trade"
+        "409":
+          $ref: "#/components/responses/TransitionConflict"
+
+  /api/approvals/{id}/reject:
+    parameters:
+      - $ref: "#/components/parameters/TradeId"
+    post:
+      operationId: rejectViaApprovals
+      summary: Reject via approvals module
+      x-roles: [risk_manager]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: "#/components/schemas/DecisionRequest"
+                - type: object
+                  required: [comment]
+      responses:
+        "200":
+          description: Rejected trade
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Trade"
+        "409":
+          $ref: "#/components/responses/TransitionConflict"
+
   /api/risk/portfolios/{portfolioCode}:
     parameters:
       - name: portfolioCode
@@ -301,7 +394,7 @@ paths:
     get:
       operationId: getPortfolioRisk
       summary: Aggregate approved trades and fixed spot scenarios
-      x-roles: [RISK_MANAGER]
+      x-roles: [risk_manager]
       responses:
         "200":
           description: Portfolio risk
@@ -319,8 +412,8 @@ paths:
   /api/audit-events:
     get:
       operationId: listAuditEvents
-      summary: List audit events newest first; equal timestamps have unspecified relative order
-      x-roles: [TRADER, RISK_MANAGER, APPROVER]
+      summary: List audit events newest first
+      x-roles: [trader, risk_manager, viewer]
       responses:
         "200":
           description: Audit timeline
@@ -335,10 +428,13 @@ paths:
 
 components:
   securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: fixed-demo-token
+    demoHeaders:
+      type: apiKey
+      in: header
+      name: X-Demo-Role
+      description: |
+        Requires both X-Demo-User and X-Demo-Role.
+        Optional: X-Run-Id, X-Case-Key. Create also requires Idempotency-Key.
 
   parameters:
     TradeId:
@@ -357,7 +453,7 @@ components:
           schema:
             $ref: "#/components/schemas/ApiError"
     Unauthenticated:
-      description: Missing or unknown fixed bearer token
+      description: Missing or invalid demo identity headers
       content:
         application/json:
           schema:
@@ -389,7 +485,6 @@ components:
         businessDate:
           type: string
           format: date
-          const: "2026-01-15"
         portfolioCount:
           type: integer
           const: 2
@@ -467,30 +562,14 @@ components:
         maturity:
           type: string
           format: date
-          description: Dates before 2026-01-15 are invalid. Same-day acceptance and valuation are intentionally unspecified.
+          description: |
+            Dates before local "today" are invalid.
+            Same-day acceptance/valuation and UTC-vs-local "today" are intentionally unspecified.
           examples: ["2027-12-31"]
         optionType:
           oneOf:
             - $ref: "#/components/schemas/OptionType"
             - type: "null"
-      allOf:
-        - if:
-            properties:
-              tradeType:
-                const: EUROPEAN_OPTION
-          then:
-            required: [optionType]
-            properties:
-              optionType:
-                $ref: "#/components/schemas/OptionType"
-        - if:
-            properties:
-              tradeType:
-                const: FORWARD
-          then:
-            properties:
-              optionType:
-                type: "null"
 
     Trade:
       type: object
@@ -546,11 +625,10 @@ components:
           format: date-time
         createdBy:
           type: string
-          enum: [TRADER]
+          description: Demo actor, typically user/role
         decisionBy:
           oneOf:
             - type: string
-              enum: [APPROVER]
             - type: "null"
         decisionComment:
           oneOf:
@@ -670,7 +748,6 @@ components:
           type: string
         actor:
           type: string
-          enum: [SYSTEM, TRADER, APPROVER, RISK_MANAGER]
         occurredAt:
           type: string
           format: date-time
