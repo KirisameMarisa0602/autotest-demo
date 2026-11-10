@@ -7,7 +7,7 @@ services:
       dockerfile: backend/Dockerfile
     environment:
       SPRING_PROFILES_ACTIVE: demo
-      APP_CORS_ALLOWED_ORIGINS: http://localhost:${FRONTEND_PORT:-4173}
+      APP_CORS_ALLOWED_ORIGINS: http://localhost:${FRONTEND_PORT:-4173},http://127.0.0.1:${FRONTEND_PORT:-4173}
     ports:
       - "${BACKEND_PORT:-8080}:8080"
     healthcheck:
