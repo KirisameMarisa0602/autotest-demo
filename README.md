@@ -73,3 +73,11 @@ Invoke-RestMethod -Method Post -Uri http://localhost:8080/api/test/reset -Header
 # 或
 powershell -File scripts/smoke.ps1
 ```
+
+联调入口在同级 `../playwright`：`npm run demo:cycle -- --skip-ai --keep-services`。候选产品修复补丁由框架侧 `patches/fix-short-delta.diff` 验证；验证器会在 patched worktree 重建 backend，结束后恢复本仓库基线镜像，故意缺陷仍留在 `main`。
+
+## 非目标
+
+- 生产认证、Temporal、管理大屏、自动合并远端 PR
+- 随机 flaky 或安全漏洞植入
+- 把源码结构当作业务 oracle（oracle 仅来自 `docs/`）
