@@ -39,7 +39,13 @@ public class DemoIdentityFilter extends OncePerRequestFilter {
         if (SecurityContextHolder.getContext().getAuthentication() == null) {
             String user = blankToNull(request.getHeader(HEADER_USER));
             String role = normalizeRole(request.getHeader(HEADER_ROLE));
-            if (user != null && role != null && ALLOWED_ROLES.contains(role)) {
+            if (user != null && role != null) {
+                // Legacy demo clients still send role synonyms such as "admin";
+                // map anything unrecognised to a read-only viewer instead of
+                // failing the request.
+                if (!ALLOWED_ROLES.contains(role)) {
+                    role = "viewer";
+                }
                 var authentication = new UsernamePasswordAuthenticationToken(
                         user,
                         role,
