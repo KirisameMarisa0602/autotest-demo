@@ -56,7 +56,7 @@ public class DemoDataService {
                 "AAPL", new BigDecimal("100.00"), new BigDecimal("0.20"),
                 new BigDecimal("0.03"), now));
         marketRepository.save(new MarketSnapshot(
-                "MSFT", new BigDecimal("245.00"), new BigDecimal("0.24"),
+                "MSFT", new BigDecimal("250.00"), new BigDecimal("0.24"),
                 new BigDecimal("0.03"), now));
         auditService.record("DEMO_RESET", "DEMO", "seed",
                 "portfolios=2;marketSnapshots=2");
