@@ -291,7 +291,7 @@ public class TradeService {
     }
 
     private static String canonical(BigDecimal value) {
-        return value.stripTrailingZeros().toPlainString();
+        return value.toPlainString();
     }
 
     private static String normalized(String value) {
