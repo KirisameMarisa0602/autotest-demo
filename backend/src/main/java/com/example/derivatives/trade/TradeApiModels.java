@@ -41,7 +41,7 @@ public final class TradeApiModels {
 
     public record DecisionRequest(
             @NotNull @PositiveOrZero Long expectedVersion,
-            String comment
+            @Size(max = 500) String comment
     ) {
     }
 
